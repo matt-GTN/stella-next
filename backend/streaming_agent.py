@@ -110,19 +110,47 @@ async def stream_agent_with_tools(
                 
                 # Stream the final response
                 final_message = final_updates["messages"][-1]
-                yield {
+                
+                # Construire la réponse avec toutes les données disponibles
+                response_data = {
                     'type': 'final_response',
                     'content': final_message.content,
-                    'has_chart': hasattr(final_message, 'plotly_json'),
-                    'has_dataframe': hasattr(final_message, 'dataframe_json'),
-                    'has_news': hasattr(final_message, 'news_json'),
-                    'has_profile': hasattr(final_message, 'profile_json'),
-                    'chart_data': getattr(final_message, 'plotly_json', None),
-                    'dataframe_data': getattr(final_message, 'dataframe_json', None),
-                    'news_data': getattr(final_message, 'news_json', None),
-                    'profile_data': getattr(final_message, 'profile_json', None),
-                    'explanation_text': getattr(final_message, 'explanation_text', None)
+                    'has_chart': False,
+                    'has_dataframe': False,
+                    'has_news': False,
+                    'has_profile': False
                 }
+                
+                # Vérifier et ajouter les données de graphique Plotly
+                if hasattr(final_message, 'plotly_json') and final_message.plotly_json:
+                    response_data['has_chart'] = True
+                    response_data['chart_data'] = final_message.plotly_json
+                    print("📊 Graphique Plotly détecté et ajouté à la réponse")
+                
+                # Vérifier et ajouter les données DataFrame
+                if hasattr(final_message, 'dataframe_json') and final_message.dataframe_json:
+                    response_data['has_dataframe'] = True
+                    response_data['dataframe_data'] = final_message.dataframe_json
+                    print("📋 DataFrame détecté et ajouté à la réponse")
+                
+                # Vérifier et ajouter les actualités
+                if hasattr(final_message, 'news_json') and final_message.news_json:
+                    response_data['has_news'] = True
+                    response_data['news_data'] = final_message.news_json
+                    print("📰 Actualités détectées et ajoutées à la réponse")
+                
+                # Vérifier et ajouter le profil d'entreprise
+                if hasattr(final_message, 'profile_json') and final_message.profile_json:
+                    response_data['has_profile'] = True
+                    response_data['profile_data'] = final_message.profile_json
+                    print("🏢 Profil d'entreprise détecté et ajouté à la réponse")
+                
+                # Vérifier et ajouter le texte explicatif
+                if hasattr(final_message, 'explanation_text') and final_message.explanation_text:
+                    response_data['explanation_text'] = final_message.explanation_text
+                    print("📝 Texte explicatif détecté et ajouté à la réponse")
+                
+                yield response_data
                 break
                 
             elif next_step == "cleanup_state":

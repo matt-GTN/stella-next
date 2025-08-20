@@ -29,7 +29,7 @@ def compare_price_histories(tickers: list[str], period_days: int = 252) -> pd.Da
     
     # Concatène toutes les séries normalisées en un seul DataFrame
     combined_df = pd.concat(all_normalized_prices, axis=1)
-    # Remplit les valeurs manquantes (si les jours de bourse diffèrent)
-    combined_df = combined_df.fillna(method='ffill')
+    # Remplit les valeurs manquantes (si les jours de bourse diffèrent) 
+    combined_df = combined_df.ffill()
     
     return combined_df

@@ -459,23 +459,40 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
             final_data = {
                 'type': 'final_message',
                 'content': final_message.content,
-                'has_chart': hasattr(final_message, 'plotly_json'),
-                'has_dataframe': hasattr(final_message, 'dataframe_json'),
-                'has_news': hasattr(final_message, 'news_json'),
-                'has_profile': hasattr(final_message, 'profile_json'),
+                'has_chart': False,
+                'has_dataframe': False,
+                'has_news': False,
+                'has_profile': False,
             }
             
-            # Add additional data if present
-            if hasattr(final_message, 'plotly_json'):
+            # Vérifier et ajouter les données de graphique Plotly
+            if hasattr(final_message, 'plotly_json') and final_message.plotly_json:
+                final_data['has_chart'] = True
                 final_data['chart_data'] = final_message.plotly_json
-            if hasattr(final_message, 'dataframe_json'):
+                print("📊 [API] Graphique Plotly détecté et ajouté à la réponse")
+                
+            # Vérifier et ajouter les données DataFrame
+            if hasattr(final_message, 'dataframe_json') and final_message.dataframe_json:
+                final_data['has_dataframe'] = True
                 final_data['dataframe_data'] = final_message.dataframe_json
-            if hasattr(final_message, 'news_json'):
+                print("📋 [API] DataFrame détecté et ajouté à la réponse")
+                
+            # Vérifier et ajouter les actualités
+            if hasattr(final_message, 'news_json') and final_message.news_json:
+                final_data['has_news'] = True
                 final_data['news_data'] = final_message.news_json
-            if hasattr(final_message, 'profile_json'):
+                print("📰 [API] Actualités détectées et ajoutées à la réponse")
+                
+            # Vérifier et ajouter le profil d'entreprise
+            if hasattr(final_message, 'profile_json') and final_message.profile_json:
+                final_data['has_profile'] = True
                 final_data['profile_data'] = final_message.profile_json
-            if hasattr(final_message, 'explanation_text'):
+                print("🏢 [API] Profil d'entreprise détecté et ajouté à la réponse")
+                
+            # Vérifier et ajouter le texte explicatif
+            if hasattr(final_message, 'explanation_text') and final_message.explanation_text:
                 final_data['explanation_text'] = final_message.explanation_text
+                print("📝 [API] Texte explicatif détecté et ajouté à la réponse")
             
             yield final_data
             
