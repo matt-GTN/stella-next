@@ -55,9 +55,9 @@ export default function ChatInput({ onSendMessage, disabled }) {
           onKeyPress={handleKeyPress}
           placeholder="Tapez votre message... (Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne)"
           disabled={disabled}
-          className="w-full resize-none rounded-2xl glass-light backdrop-blur-xl px-5 py-3.5 pr-14 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder:bg-gradient-to-r placeholder:from-purple-500/50 placeholder:to-pink-500/50 placeholder:bg-clip-text placeholder:text-transparent shadow-xl hover:shadow-2xl bg-gradient-to-r from-white/50 to-white/30 font-medium"
+          className="w-full resize-none rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 px-4 py-3 pr-12 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300/30 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-600"
           style={{
-            minHeight: '52px',
+            minHeight: '48px',
             maxHeight: '120px'
           }}
           rows={1}
@@ -66,12 +66,12 @@ export default function ChatInput({ onSendMessage, disabled }) {
         {/* Microphone button (placeholder for future voice input) */}
         <motion.button
           type="button"
-          className="absolute right-14 bottom-3.5 p-2.5 rounded-xl glass backdrop-blur-md hover:bg-white/30 transition-all duration-200 shadow-md"
-          whileHover={{ scale: 1.15, rotate: 5 }}
+          className="absolute right-12 bottom-3 p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           disabled={disabled}
         >
-          <Mic className="w-4 h-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent" />
+          <Mic className="w-4 h-4" />
         </motion.button>
       </div>
 
@@ -79,12 +79,11 @@ export default function ChatInput({ onSendMessage, disabled }) {
       <motion.button
         type="submit"
         disabled={!message.trim() || disabled}
-        className="flex-shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 via-pink-600 to-purple-600 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl transition-all duration-300 hover-lift"
-        whileHover={!disabled && message.trim() ? { scale: 1.08, rotate: 5 } : {}}
-        whileTap={!disabled && message.trim() ? { scale: 0.92 } : {}}
-        transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-600 hover:bg-gray-700 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        whileHover={!disabled && message.trim() ? { scale: 1.05 } : {}}
+        whileTap={!disabled && message.trim() ? { scale: 0.95 } : {}}
       >
-        <Send className="w-5 h-5 ml-0.5" />
+        <Send className="w-5 h-5" />
       </motion.button>
     </motion.form>
   );

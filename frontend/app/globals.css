@@ -1,150 +1,70 @@
 @import "tailwindcss";
 
-/* Variables de couleurs vibrantes */
-:root {
-  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  --gradient-vibrant: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-  --gradient-ocean: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
-  --gradient-sunset: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-  --gradient-purple-pink: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-}
-
-/* Classes utilitaires glassmorphism */
+/* Classes utilitaires glassmorphism pur */
 .glass {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.glass-light {
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.glass-dark {
-  background: rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.glass-vibrant {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-/* Effets de hover vibrants */
+/* Effets de hover simples */
 .hover-lift {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(168, 85, 247, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
 /* Animations douces */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
-  50% { box-shadow: 0 0 40px rgba(236, 72, 153, 0.7); }
+  50% { transform: translateY(-5px); }
 }
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
 /* Styles pour le highlighting du code dans les messages */
 .markdown-content pre {
-  background: linear-gradient(135deg, rgba(248, 249, 250, 0.95) 0%, rgba(241, 243, 245, 0.95) 100%);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-  border-radius: 12px;
-  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
   overflow-x: auto;
   font-family: 'Geist Mono', monospace;
   font-size: 14px;
-  line-height: 1.5;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  line-height: 1.4;
 }
 
 .markdown-content code {
   font-family: 'Geist Mono', monospace;
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
   border-radius: 4px;
 }
 
-/* Scrollbar personnalisée avec couleurs vibrantes */
+/* Scrollbar personnalisée transparente */
 .scroll-smooth::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .scroll-smooth::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  border-radius: 3px;
 }
 
 .scroll-smooth::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }
 
 .scroll-smooth::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #9333ea 0%, #db2777 100%);
-  background-clip: padding-box;
-}
-
-/* Boutons vibrants */
-.btn-vibrant {
-  background: var(--gradient-purple-pink);
-  color: white;
-  font-weight: 600;
-  padding: 10px 24px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
-}
-
-.btn-vibrant:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(168, 85, 247, 0.4);
-}
-
-.btn-glass {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: white;
-  font-weight: 600;
-  padding: 10px 24px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.btn-glass:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.3);
 }
