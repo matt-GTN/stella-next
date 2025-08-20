@@ -1,0 +1,46 @@
+# --- Interface Web ---
+streamlit==1.46.0
+
+# --- API Framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.6
+python-multipart==0.0.20
+
+# --- Gestion des Clés API ---
+python-dotenv==1.1.1
+
+# --- Manipulation et Analyse de Données ---
+pandas==2.2.3
+scikit-learn==1.6.1
+numpy==2.2.5
+yfinance==0.2.64
+
+# --- Communication API ---
+requests==2.32.4
+
+# --- Ecosystème LangChain & LangGraph ---
+openai==1.95.1
+langchain-openai==0.3.27
+langgraph==0.4.8
+langsmith==0.4.1
+langchain-core==0.3.72
+langchain-community==0.3.27
+langchain-huggingface==0.3.1
+
+# --- Visualisation ---
+plotly==6.0.1
+graphviz==0.21
+playwright==1.52.0
+shap==0.48.0
+matplotlib==3.10.3
+
+# --- Notebooks ---
+nbformat==5.10.4
+pathlib==1.0.1
+kaleido==1.0.0
+
+# --- RAG ---
+pypdf==5.9.0
+chromadb==1.0.15
+sentence-transformers==5.1.0
