@@ -84,7 +84,17 @@ async def stream_agent_with_tools(
                 
                 # Execute tools synchronously
                 tool_updates = execute_tool_node(current_state)
-                current_state.update(tool_updates)
+                
+                # Merge tool outputs into message history instead of replacing it
+                if 'messages' in tool_updates:
+                    current_state_messages = current_state.get('messages', [])
+                    current_state['messages'] = current_state_messages + tool_updates['messages']
+                
+                # Copy any other state updates (like plotly_json, ticker, etc.)
+                for k, v in tool_updates.items():
+                    if k == 'messages':
+                        continue
+                    current_state[k] = v
                 
                 yield {
                     'type': 'tool_completed',
@@ -255,7 +265,8 @@ async def update_state_with_agent_response(state: AgentState) -> AgentState:
 
 def determine_next_step(state: AgentState) -> str:
     """
-    Determine next step based on current state (simplified version of router)
+    Determine next step based on current state.
+    Mirrors the logic of agent.router sufficiently for streaming mode.
     """
     
     if state.get("error"):
@@ -272,15 +283,41 @@ def determine_next_step(state: AgentState) -> str:
         return "agent"
     
     # If last message is AI with tool calls, execute tools
-    if isinstance(last_message, AIMessage) and hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+    if isinstance(last_message, AIMessage) and getattr(last_message, 'tool_calls', None):
         return "execute_tool"
     
-    # If last message is AI without tool calls, we're done
-    if isinstance(last_message, AIMessage) and not hasattr(last_message, 'tool_calls'):
+    # If the last messages are ToolMessages, decide what to do next based on the
+    # most recent AI tool call and how many tools have executed.
+    from langchain_core.messages import ToolMessage
+    ai_message_with_tool_call = next(
+        (m for m in reversed(messages) if isinstance(m, AIMessage) and getattr(m, 'tool_calls', None)),
+        None,
+    )
+    if ai_message_with_tool_call:
+        executed_tool_calls = [m for m in reversed(messages) if isinstance(m, ToolMessage)]
+        remaining_tool_calls = ai_message_with_tool_call.tool_calls
+        # If not all tools from that AI message have executed yet, continue executing
+        if len(executed_tool_calls) < len(remaining_tool_calls):
+            return "execute_tool"
+        # All tools executed: route based on the last tool name
+        tool_name = remaining_tool_calls[-1]['name']
+        if tool_name in ['compare_stocks', 'display_price_chart', 'create_dynamic_chart']:
+            return "prepare_chart_display"
+        if tool_name in ['display_raw_data', 'display_processed_data']:
+            return "prepare_data_display"
+        if tool_name == 'get_stock_news':
+            return "prepare_news_display"
+        if tool_name == 'get_company_profile':
+            return "prepare_profile_display"
+        if tool_name == 'analyze_risks':
+            return "generate_final_response"
+        # For other tools, go back to agent to continue
+        return "agent"
+    
+    # If last message is AI without tool calls, end
+    if isinstance(last_message, AIMessage) and not getattr(last_message, 'tool_calls', None):
         return "end"
     
-    # Check for specific tool completions to determine final step
-    # (This would need more sophisticated logic based on the actual router)
     return "end"
 
 # Test function

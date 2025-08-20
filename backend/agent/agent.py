@@ -409,8 +409,24 @@ def execute_tool_node(state: AgentState):
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé.]"))
 
             elif tool_name in ["display_raw_data", "display_processed_data"]:
-                if not state.get("fetched_df_json"):
-                     raise ValueError("Aucune donnée disponible à afficher.")
+                # Vérifie la disponibilité des données en tenant compte de la chaîne d'outils en cours
+                if tool_name == "display_raw_data":
+                    df_json = (
+                        current_state_updates.get("fetched_df_json") or
+                        working_state.get("fetched_df_json") or
+                        state.get("fetched_df_json")
+                    )
+                else:  # display_processed_data
+                    df_json = (
+                        current_state_updates.get("processed_df_json") or
+                        working_state.get("processed_df_json") or
+                        state.get("processed_df_json")
+                    )
+
+                if not df_json:
+                    raise ValueError("Aucune donnée disponible à afficher.")
+
+                # Rien à renvoyer ici, on laisse le noeud prepare_data_display attacher le bon DataFrame
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
 
             elif tool_name == "get_company_profile":
