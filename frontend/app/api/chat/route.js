@@ -90,7 +90,17 @@ async function handleNonStreamingRequest(message) {
       JSON.stringify({
         response: data.response || data.message || "Désolé, je n'ai pas pu traiter votre demande.",
         timestamp: new Date().toISOString(),
-        streaming: false
+        streaming: false,
+        // pass-through attachments so the frontend can render
+        has_chart: !!data.has_chart,
+        chart_data: data.chart_data || null,
+        has_dataframe: !!data.has_dataframe,
+        dataframe_data: data.dataframe_data || null,
+        has_news: !!data.has_news,
+        news_data: data.news_data || null,
+        has_profile: !!data.has_profile,
+        profile_data: data.profile_data || null,
+        explanation_text: data.explanation_text || null
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );

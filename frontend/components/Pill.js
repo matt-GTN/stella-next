@@ -5,13 +5,21 @@ import Flag from './Flag';
 
 const Pill = ({ children, color, searchable = true, searchTerms, searchContext, className, size = 'default', flag }) => {
   const hoverTransition = {
-    duration: 0.2,
-    ease: "easeOut"
+    duration: 0.3,
+    type: "spring",
+    stiffness: 400,
+    damping: 17
   };
 
   const sizeStyles = {
-    default: 'text-xs sm:text-sm font-bold px-2.5 sm:px-3 py-1.5 rounded-full min-h-[32px]',
-    badge: 'text-xs px-2.5 py-1 badge badge-lg font-bold'
+    default: 'text-xs sm:text-sm font-bold px-3.5 sm:px-4 py-2 rounded-2xl min-h-[36px]',
+    badge: 'text-xs px-3 py-1.5 badge badge-lg font-bold rounded-xl'
+  };
+
+  // Couleurs vibrantes par défaut si pas de couleur spécifiée
+  const getVibrantColor = () => {
+    if (color) return color;
+    return 'bg-gradient-to-br from-purple-500 to-pink-500';
   };
 
   return (
@@ -21,13 +29,16 @@ const Pill = ({ children, color, searchable = true, searchTerms, searchContext, 
       searchContext={searchContext}
     >
       <motion.div
-        whileHover={{ scale: 1.03, y: -2 }}
-        whileTap={{ scale: 0.97 }}
+        whileHover={{ scale: 1.08, y: -3, rotate: 2 }}
+        whileTap={{ scale: 0.95 }}
         transition={hoverTransition}
-        className={`text-white transition-colors duration-300 flex items-center justify-center ${sizeStyles[size]} ${color} ${className}`}
+        className={`text-white transition-all duration-300 flex items-center justify-center glass-light backdrop-blur-md shadow-lg hover:shadow-xl ${sizeStyles[size]} ${getVibrantColor()} ${className} hover-lift`}
+        style={{
+          background: !color ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.8) 0%, rgba(236, 72, 153, 0.8) 100%)' : undefined
+        }}
       >
         {flag && <Flag countryCode={flag} className="mr-2" />}
-        {children}
+        <span className="font-semibold">{children}</span>
       </motion.div>
     </InteractivePill>
   );

@@ -118,6 +118,30 @@ export default function Home() {
                     : msg
                 )
               );
+            } else if (data.type === 'final_response' || data.type === 'final_message') {
+              // Attach any rich payloads (chart, dataframe, etc.) to the assistant message
+              setMessages(prev => 
+                prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { 
+                        ...msg,
+                        isStreaming: false,
+                        // keep content if present
+                        content: data.content || msg.content,
+                        has_chart: !!data.has_chart,
+                        chart_data: data.chart_data || null,
+                        has_dataframe: !!data.has_dataframe,
+                        dataframe_data: data.dataframe_data || null,
+                        has_news: !!data.has_news,
+                        news_data: data.news_data || null,
+                        has_profile: !!data.has_profile,
+                        profile_data: data.profile_data || null,
+                        explanation_text: data.explanation_text || null
+                      }
+                    : msg
+                )
+              );
+              return;
             } else if (data.type === 'done' || data.type === 'finished') {
               setMessages(prev => 
                 prev.map(msg => 
@@ -185,7 +209,20 @@ export default function Home() {
     }
 
     const data = await response.json();
-    
+
+    // If backend returned attachments, attach them now (content will still stream-simulate)
+    const attachments = {
+      has_chart: !!data.has_chart,
+      chart_data: data.chart_data || null,
+      has_dataframe: !!data.has_dataframe,
+      dataframe_data: data.dataframe_data || null,
+      has_news: !!data.has_news,
+      news_data: data.news_data || null,
+      has_profile: !!data.has_profile,
+      profile_data: data.profile_data || null,
+      explanation_text: data.explanation_text || null
+    };
+
     // Simuler le streaming caractère par caractère
     const fullResponse = data.response;
     let currentContent = '';
@@ -196,7 +233,7 @@ export default function Home() {
       setMessages(prev => 
         prev.map(msg => 
           msg.id === assistantMessageId 
-            ? { ...msg, content: currentContent }
+            ? { ...msg, content: currentContent, ...attachments }
             : msg
         )
       );
