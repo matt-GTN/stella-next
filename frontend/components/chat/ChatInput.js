@@ -53,9 +53,9 @@ export default function ChatInput({ onSendMessage, disabled }) {
           value={message}
           onChange={handleTextareaChange}
           onKeyPress={handleKeyPress}
-          placeholder="Tapez votre message... (Entrée pour envoyer, Shift+Entrée pour une nouvelle ligne)"
+          placeholder="Tapez votre message... "
           disabled={disabled}
-          className="w-full resize-none rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 px-4 py-3 pr-12 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300/30 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-600"
+          className="w-full resize-none rounded-2xl backdrop-blur-xs border border-black/10 px-4 py-3 pr-12 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300/30 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500 text-black"
           style={{
             minHeight: '48px',
             maxHeight: '120px'
@@ -66,12 +66,11 @@ export default function ChatInput({ onSendMessage, disabled }) {
         {/* Microphone button (placeholder for future voice input) */}
         <motion.button
           type="button"
-          className="absolute right-12 bottom-3 p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          className="absolute right-12 bottom-3 p-2 text-gray-500 hover:text-gray-700 transition-colors duration-200"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           disabled={disabled}
         >
-          <Mic className="w-4 h-4" />
         </motion.button>
       </div>
 
@@ -79,7 +78,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
       <motion.button
         type="submit"
         disabled={!message.trim() || disabled}
-        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-600 hover:bg-gray-700 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
         whileHover={!disabled && message.trim() ? { scale: 1.05 } : {}}
         whileTap={!disabled && message.trim() ? { scale: 0.95 } : {}}
       >

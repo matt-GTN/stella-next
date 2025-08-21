@@ -130,7 +130,7 @@ Modern React/Next.js 15 application with:
 
 **Backend (.env):**
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 LANGSMITH_API_KEY=your_langsmith_api_key_here  
 LANGSMITH_PROJECT=stella
 ```
@@ -141,8 +141,7 @@ LANGSMITH_PROJECT=stella
 
 ### API Configuration
 
-- **LLM Model**: `moonshotai/kimi-k2:free` via OpenRouter
-- **Base URL**: `https://openrouter.ai/api/v1`
+- **LLM Model**: `moonshotai/kimi-k2-instruct` via Groq
 - **Session Management**: Thread-based conversation memory
 - **CORS**: Configured for localhost:3000, 3001
 

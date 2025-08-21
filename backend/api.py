@@ -24,10 +24,6 @@ from pydantic import BaseModel
 import uvicorn
 from src.fetch_data import APILimitError
 
-# Import direct streaming capability
-from direct_streaming import stream_direct_llm_response
-from streaming_agent import stream_agent_with_tools
-
 
 # Change to the directory containing the agent and import
 original_dir = os.getcwd()
@@ -107,8 +103,6 @@ async def root():
         "endpoints": {
             "chat": "/chat",
             "chat_stream": "/chat/stream",
-            "chat_stream_direct": "/chat/stream/direct",
-            "chat_stream_tools": "/chat/stream/tools",
             "health": "/health",
             "docs": "/docs"
         }
@@ -184,131 +178,7 @@ async def chat_with_stella_stream(request: ChatRequest):
         }
     )
 
-# Direct LLM streaming endpoint for true token-by-token streaming
-@app.post("/chat/stream/direct")
-async def chat_with_stella_stream_direct(request: ChatRequest):
-    """
-    Chat directly with Stella LLM - true token-by-token streaming
-    Note: This bypasses tools and agent workflow but provides real streaming
-    """
-    async def generate_direct_sse_stream():
-        try:
-            # Generate session ID if not provided
-            session_id = request.session_id or f"session_{uuid.uuid4()}"
-            
-            logger.info(f"Processing direct streaming message for session {session_id}: {request.message[:100]}...")
-            
-            # Send session ID first
-            yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
-            
-            # Stream directly from LLM
-            try:
-                async for token in stream_direct_llm_response(request.message):
-                    if token:
-                        chunk_data = {
-                            'type': 'content_delta',
-                            'content': token
-                        }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
-                        
-            except Exception as e:
-                logger.error(f"Direct streaming error for session {session_id}: {str(e)}", exc_info=True)
-                error_data = {
-                    'type': 'error',
-                    'error': f"Erreur de streaming direct: {str(e)}",
-                    'error_code': 500
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-            
-            # Send completion signal
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            
-        except Exception as e:
-            logger.error(f"Direct streaming error: {str(e)}", exc_info=True)
-            error_data = {
-                'type': 'error',
-                'error': f"Internal server error: {str(e)}",
-                'error_code': 500
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-    
-    return StreamingResponse(
-        generate_direct_sse_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
-# Hybrid streaming endpoint: token-by-token streaming WITH tools
-@app.post("/chat/stream/tools")
-async def chat_with_stella_stream_tools(request: ChatRequest):
-    """
-    Chat with Stella agent with full tools - hybrid streaming approach
-    Combines token-by-token streaming with complete agent workflow
-    """
-    async def generate_hybrid_sse_stream():
-        try:
-            # Generate session ID if not provided
-            session_id = request.session_id or f"session_{uuid.uuid4()}"
-            
-            logger.info(f"Processing hybrid streaming message for session {session_id}: {request.message[:100]}...")
-            
-            # Send session ID first
-            yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
-            
-            # Stream using our hybrid agent
-            try:
-                async for chunk in stream_agent_with_tools(request.message, session_id):
-                    if chunk:
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                        
-            except APILimitError as e:
-                logger.warning(f"API limit reached for session {session_id}: {str(e)}")
-                error_data = {
-                    'type': 'error',
-                    'error': f"Limite d'API atteinte: {str(e)}. Réessayez plus tard.",
-                    'error_code': 429
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-                
-            except Exception as e:
-                logger.error(f"Hybrid streaming error for session {session_id}: {str(e)}", exc_info=True)
-                error_data = {
-                    'type': 'error',
-                    'error': f"Erreur de streaming hybride: {str(e)}",
-                    'error_code': 500
-                }
-                yield f"data: {json.dumps(error_data)}\n\n"
-                return
-            
-            # Send completion signal
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            
-        except Exception as e:
-            logger.error(f"Hybrid streaming error: {str(e)}", exc_info=True)
-            error_data = {
-                'type': 'error',
-                'error': f"Internal server error: {str(e)}",
-                'error_code': 500
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
-    
-    return StreamingResponse(
-        generate_hybrid_sse_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
+# Legacy endpoints removed - only /chat/stream is needed now with full agent support
 
 # Main chat endpoint
 @app.post("/chat", response_model=ChatResponse)
@@ -417,7 +287,7 @@ async def chat_with_stella(request: ChatRequest):
 
 async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any], loop):
     """
-    Helper function to run the Stella agent with real token-by-token streaming for SSE
+    Run the TRUE Stella agent with its native workflow and stream the responses
     """
     # Change to agent directory for execution
     current_dir = os.getcwd()
@@ -425,76 +295,208 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
     os.chdir(agent_dir)
     
     try:
-        accumulated_content = ""
         final_message = None
+        current_step = ""
         
-        # Use LangGraph's streaming capability with "updates" mode to get token-level chunks
+        # Track variables to store the correct final message with attachments
+        chart_message = None
+        dataframe_message = None
+        news_message = None
+        profile_message = None
+        
+        # Track pending tool calls from agent decisions
+        pending_tool_calls = []
+        
+        # Track the agent workflow in real time
         async for event in stella_agent.astream(inputs, config=config, stream_mode="updates"):
-            # Process each update from the agent
             for node_name, node_output in event.items():
-                if "messages" in node_output:
-                    messages = node_output["messages"]
-                    if messages:
-                        current_message = messages[-1]
+                print(f"[STREAMING] Node: {node_name}, Output keys: {list(node_output.keys()) if isinstance(node_output, dict) else 'not a dict'}")
+                
+                # Provide status updates for different workflow steps
+                if node_name == "agent" and current_step != "agent":
+                    current_step = "agent"
+                    yield {
+                        'type': 'status',
+                        'step': 'analyzing'
+                    }
+                    
+                elif node_name == "execute_tool" and current_step != "execute_tool":
+                    current_step = "execute_tool" 
+                    yield {
+                        'type': 'status', 
+                        'step': 'processing'
+                    }
+                    
+                elif node_name in ["generate_final_response", "prepare_chart_display", "prepare_data_display", "prepare_news_display", "prepare_profile_display"] and current_step != "final_processing":
+                    current_step = "final_processing"
+                    yield {
+                        'type': 'status',
+                        'step': 'finalizing'
+                    }
+                
+                # Check if this node has messages with AI response
+                if "messages" in node_output and node_output["messages"]:
+                    for message in node_output["messages"]:
+                        print(f"[STREAMING] Message type: {type(message).__name__}, has content: {hasattr(message, 'content') and bool(message.content)}, has tool_calls: {hasattr(message, 'tool_calls') and bool(message.tool_calls)}")
                         
-                        # Check if this is an AI message with content
-                        if hasattr(current_message, 'content') and current_message.content:
-                            new_content = current_message.content
+                        # IMPORTANT: Capture tool calls from agent node decisions
+                        if node_name == "agent" and hasattr(message, 'tool_calls') and message.tool_calls:
+                            print(f"[STREAMING] Agent decided to call {len(message.tool_calls)} tool(s)")
                             
-                            # If content is longer than what we've seen, yield the delta
-                            if len(new_content) > len(accumulated_content):
-                                delta = new_content[len(accumulated_content):]
-                                accumulated_content = new_content
+                            # Store pending tool calls
+                            pending_tool_calls = message.tool_calls.copy()
+                            
+                            # Stream the reasoning content first if present
+                            if hasattr(message, 'content') and message.content:
+                                print(f"[STREAMING] Streaming agent reasoning: {message.content[:100]}...")
+                                content = message.content
+                                words = content.split(' ')
                                 
-                                yield {
-                                    'type': 'content_delta',
-                                    'content': delta
-                                }
+                                for i, word in enumerate(words):
+                                    yield {
+                                        'type': 'initial_content',
+                                        'chunk': " " + word if i > 0 else word
+                                    }
+                                    await asyncio.sleep(0.03)
                             
-                            # Update our reference to the current message
-                            final_message = current_message
+                            # Then immediately stream the tool call information
+                            for tool_call in pending_tool_calls:
+                                tool_name = tool_call.get('name', 'unknown_tool')
+                                tool_args = tool_call.get('args', {})
+                                yield {
+                                    'type': 'tool_call',
+                                    'tool_name': tool_name,
+                                    'args': tool_args
+                                }
+                                print(f"[STREAMING] Streamed tool call: {tool_name} with args: {tool_args}")
+                        
+                        # Stream AI messages with content (including initial reasoning)
+                        elif hasattr(message, 'content') and message.content and type(message).__name__ == 'AIMessage':
+                            # Check if this message has tool calls (initial reasoning message) - fallback for non-agent nodes
+                            if hasattr(message, 'tool_calls') and message.tool_calls and node_name != "agent":
+                                print(f"[STREAMING] Found AI message with tool calls from {node_name}: {message.content[:100]}...")
+                                
+                                # First, stream the reasoning content as INITIAL content
+                                content = message.content
+                                words = content.split(' ')
+                                
+                                for i, word in enumerate(words):
+                                    yield {
+                                        'type': 'initial_content',
+                                        'chunk': " " + word if i > 0 else word
+                                    }
+                                    await asyncio.sleep(0.03)
+                                
+                                # Then, stream the tool calls
+                                for tool_call in message.tool_calls:
+                                    tool_name = tool_call.get('name', 'unknown_tool')
+                                    yield {
+                                        'type': 'tool_call',
+                                        'tool_name': tool_name,
+                                        'args': tool_call.get('args', {})
+                                    }
+                                    print(f"[STREAMING] Tool call: {tool_name}")
+                            
+                            # Handle final AI messages without tool calls
+                            elif not hasattr(message, 'tool_calls') or not message.tool_calls:
+                                print(f"[STREAMING] Found final AI response: {message.content[:100]}...")
+                                
+                                # Don't stream again if this is the same final message
+                                if not final_message or final_message.content != message.content:
+                                    content = message.content
+                                    words = content.split(' ')
+                                    
+                                    for i, word in enumerate(words):
+                                        yield {
+                                            'type': 'final_content',
+                                            'chunk': " " + word if i > 0 else word
+                                        }
+                                        await asyncio.sleep(0.03)
+                                    
+                                    final_message = message
+                        
+                        # Also check for messages that might be final responses without tool_calls attribute
+                        elif (hasattr(message, 'content') and message.content and 
+                              not hasattr(message, 'tool_calls') and 
+                              node_name in ["generate_final_response", "prepare_chart_display", "prepare_data_display", "prepare_news_display", "prepare_profile_display"]):
+                            print(f"[STREAMING] Found final response from {node_name}: {message.content[:100]}...")
+                            
+                            # Stream this response if it's different from what we already streamed
+                            if not final_message or final_message.content != message.content:
+                                content = message.content
+                                words = content.split(' ')
+                                
+                                for i, word in enumerate(words):
+                                    yield {
+                                        'type': 'content',
+                                        'chunk': " " + word if i > 0 else word
+                                    }
+                                    await asyncio.sleep(0.03)
+                                
+                                final_message = message
         
-        # Send final data if available
+        # If we didn't get a streamed final message, get the final state (without re-streaming content)
+        if not final_message:
+            print("[STREAMING] No streamed final message found, getting final state...")
+            # Get the final state to extract the final message for attachments only
+            final_state = None
+            async for event in stella_agent.astream(inputs, config=config, stream_mode="values"):
+                final_state = event
+            
+            if final_state and "messages" in final_state and final_state["messages"]:
+                # Get the last AI message for attachments only (don't re-stream content)
+                for msg in reversed(final_state["messages"]):
+                    if hasattr(msg, 'content') and msg.content and type(msg).__name__ == 'AIMessage':
+                        print(f"[STREAMING] Found final message in state for attachments: {msg.content[:100]}...")
+                        final_message = msg
+                        # Don't re-stream the content since it was already processed
+                        break
+        
+        # Send final data with all attachments if available (no content to avoid duplication)
         if final_message:
             final_data = {
                 'type': 'final_message',
-                'content': final_message.content,
+                # Don't include content here as it was already streamed above
                 'has_chart': False,
                 'has_dataframe': False,
                 'has_news': False,
                 'has_profile': False,
             }
             
-            # Vérifier et ajouter les données de graphique Plotly
+            # Check and add all attachments from the agent's result
             if hasattr(final_message, 'plotly_json') and final_message.plotly_json:
                 final_data['has_chart'] = True
                 final_data['chart_data'] = final_message.plotly_json
                 print("📊 [API] Graphique Plotly détecté et ajouté à la réponse")
                 
-            # Vérifier et ajouter les données DataFrame
             if hasattr(final_message, 'dataframe_json') and final_message.dataframe_json:
                 final_data['has_dataframe'] = True
                 final_data['dataframe_data'] = final_message.dataframe_json
                 print("📋 [API] DataFrame détecté et ajouté à la réponse")
                 
-            # Vérifier et ajouter les actualités
             if hasattr(final_message, 'news_json') and final_message.news_json:
                 final_data['has_news'] = True
                 final_data['news_data'] = final_message.news_json
                 print("📰 [API] Actualités détectées et ajoutées à la réponse")
                 
-            # Vérifier et ajouter le profil d'entreprise
             if hasattr(final_message, 'profile_json') and final_message.profile_json:
                 final_data['has_profile'] = True
                 final_data['profile_data'] = final_message.profile_json
                 print("🏢 [API] Profil d'entreprise détecté et ajouté à la réponse")
                 
-            # Vérifier et ajouter le texte explicatif
             if hasattr(final_message, 'explanation_text') and final_message.explanation_text:
                 final_data['explanation_text'] = final_message.explanation_text
                 print("📝 [API] Texte explicatif détecté et ajouté à la réponse")
             
             yield final_data
+        else:
+            print("[STREAMING] Warning: No final message found to stream")
+            yield {
+                'type': 'error',
+                'content': 'Aucune réponse générée par l\'agent'
+            }
+        
+        print("📋 [API] Exécution native de l'agent Stella avec streaming terminée")
             
     finally:
         # Always change back to original directory

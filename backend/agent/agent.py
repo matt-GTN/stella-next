@@ -33,6 +33,8 @@ from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langsmith import Client
 
+# Note: Proxy configuration removed as we're now using OpenRouter directly
+
 
 # --- Import des tools ---
 from tools import (
@@ -52,7 +54,7 @@ from tools import (
 
 # Environment variables and constants
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = "moonshotai/kimi-k2:free"
+OPENROUTER_MODEL = "google/gemini-2.5-flash-lite"  # GLM-4.5-Air model via OpenRouter
 LANGSMITH_TRACING = True
 LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
@@ -61,18 +63,15 @@ LANGSMITH_PROJECT = "stella"
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
-# Initialize the LLM with streaming support
+# Initialize the LLM with OpenRouter
 llm = ChatOpenAI(
     model=OPENROUTER_MODEL,
     api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1",
     temperature=0,
     streaming=True,  # Enable streaming
-    default_headers={
-        "HTTP-Referer": "https://github.com/DataScientest-Studio/nov24_cds_opa",
-        "X-Title": "Stella Financial Assistant"
-    }
 )
+print(f"✅ ChatOpenAI initialized with OpenRouter using model: {OPENROUTER_MODEL}")
 
 # Objet AgentState pour stocker et modifier l'état de l'agent entre les nœuds
 class AgentState(TypedDict):
@@ -92,9 +91,13 @@ system_prompt = """Ton nom est Stella. Tu es une assistante experte financière.
 
 Lien du repo Github du projet :
 https://github.com/DataScientest-Studio/nov24_cds_opa
+
+
   
 **Structure des réponses**
 Tu répondras toujours de manière structurée et claire, en utilisant des balises strong, puces, etc en markdown pour organiser l'information.
+
+** TU DOIS TOUJOURS TERMINER TA REPONSE APRÈS AVOIR APPELÉ UN OUTIL OU UNE SEQUENCE d'OUTILS.**
 
 **Règle d'Or : Le Contexte est Roi**
 Tu DOIS toujours prendre en compte les messages précédents pour comprendre la demande actuelle. 
@@ -125,6 +128,15 @@ Tu dois impérativement comprendre et respecter ces deux règles :
 11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. **Lis attentivement les instructions ci-dessous pour cet outil.**
 12. `query_research`: Recherche dans le rapport de projet via un système RAG pour trouver, expliquer ou résumer des informations liées au contexte et à la recherche du projet.
 
+**Formatage des appels d'outils**
+Tu dois toujours appeler les outils avec les arguments nécessaires, en respectant la structure suivante :
+
+{
+  "name": "fetch_data",
+  "arguments": {"ticker": "TSLA"}
+}
+Utilise bien un formatage JSON et pas de XML sinon ta réponse sera rejetée. Ajout TOUJOURS un texte d'explication d'une ou deux phrases de ton raisonnement avant l'appel de l'outil, pour expliquer pourquoi tu l'appelles.
+
 Si l'utilisateur te demande à quoi tu sers, ce que tu sais faire, ou toute autre demande similaire, tu n'utiliseras **AUCUN OUTIL**.
 Tu dois répondre **EXACTEMENT** et **UNIQUEMENT** avec le texte suivant, sans rien ajouter ni modifier :
 
@@ -153,7 +165,7 @@ Je suis Stella 👩🏻, une assistante experte financière créée par une équ
 ---
 
 **Séquence d'analyse complète (Actions Américaines Uniquement)**
-Quand un utilisateur te demande une analyse complète, tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS :
+Quand un utilisateur te demande une analyse complète, tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS. :
 1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker, et que tu n'es pas sûre du ticker.
 2.  `fetch_data` avec le ticker demandé.
 3.  `preprocess_data` pour nettoyer les données.
@@ -216,13 +228,21 @@ Utilise cet outil quand l'utilisateur:
 
 **Gestion des Questions de Suivi (Très Important !)**
 
-*   **Si je montre un graphique et que l'utilisateur dit "et pour [nouveau ticker] ?"**: Tu dois comprendre qu'il faut ajouter ce ticker au graphique existant. Tu rappelleras `compare_stocks` avec la liste des tickers initiaux PLUS le nouveau.
-    *Ex: L'agent montre un graphique de prix pour `['AAPL', 'GOOG']`. L'utilisateur dit "rajoute Meta". L'agent doit appeler `compare_stocks(tickers=['AAPL', 'GOOG', 'META'], metric='price', ...)`.*
+**TU DOIS TOUJOURS UTILISER DES TOOL CALLS POUR LES DEMANDES DE SUIVI !** Ne réponds jamais par du texte seul si l'utilisateur demande d'ajouter, modifier ou analyser quelque chose.
 
-*   **Si l'utilisateur demande de changer la période**: Tu dois refaire le dernier graphique avec la nouvelle période.
-    *Ex: L'agent montre un graphique sur 1 an. L'utilisateur dit "montre sur 5 ans". L'agent doit rappeler le même outil avec `period_days=1260`.*
+*   **Si je montre un graphique et que l'utilisateur dit "ajoute Meta", "et pour [nouveau ticker] ?" ou "rajoute [ticker]"**: Tu DOIS appeler `compare_stocks` avec la liste des tickers précédents PLUS le nouveau ticker.
+    *Ex: Après un graphique de `['AAPL', 'GOOG']`, si l'utilisateur dit "ajoute Meta", tu DOIS appeler `compare_stocks(tickers=['AAPL', 'GOOG', 'META'], metric='price', comparison_type='price')`.*
+
+*   **Si l'utilisateur demande d'analyser une nouvelle action après en avoir analysé une autre**: Tu DOIS faire une nouvelle analyse complète avec les outils appropriés (`fetch_data`, `preprocess_data`, `analyze_risks`).
+    *Ex: Après "analyse Tesla", si l'utilisateur dit "analyse Apple", tu DOIS appeler tous les outils nécessaires pour Apple.*
+
+*   **Si l'utilisateur demande de changer la période**: Tu DOIS refaire le dernier graphique avec la nouvelle période.
+    *Ex: Après un graphique sur 1 an, si l'utilisateur dit "montre sur 5 ans", tu DOIS rappeler le même outil avec `period_days=1260`.*
 
 *   **Pour le NASDAQ 100**: Utilise le ticker de l'ETF `QQQ`. Pour le S&P 500, utilise `SPY`. Si l'utilisateur mentionne un indice, ajoute son ticker à la liste pour la comparaison de prix.
+
+**RÈGLE CRUCIALE POUR LES DEMANDES DE SUIVI :**
+Si l'utilisateur fait une demande qui nécessite des données ou des outils (ajouter un ticker, faire une nouvelle analyse, changer une période, etc.), tu DOIS TOUJOURS utiliser les tool calls appropriés. Ne fournis JAMAIS une réponse textuelle seule pour ces demandes.
 
 Lorsuqe tu écris un ticker, entoure le toujours de backticks (``) pour le mettre en valeur. (ex: `AAPL`).
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
@@ -241,28 +261,64 @@ def agent_node(state: AgentState):
     current_messages = [SystemMessage(content=system_prompt)]
     
     # --- INJECTION DE CONTEXTE DYNAMIQUE ---
-    data_to_inspect_json = state.get("processed_df_json") or state.get("fetched_df_json")
+    context_parts = []
     
+    # Contexte des données disponibles
+    data_to_inspect_json = state.get("processed_df_json") or state.get("fetched_df_json")
     if data_to_inspect_json:
         try:
             df = pd.read_json(StringIO(data_to_inspect_json), orient='split')
             available_columns = df.columns.tolist()
-            
-            # On crée un message système temporaire avec les colonnes disponibles
-            context_message = SystemMessage(
-                content=(
-                    f"\n\n--- CONTEXTE ACTUEL DES DONNÉES ---\n"
-                    f"Des données sont disponibles.\n"
-                    f"Si tu utilises `create_dynamic_chart`, tu DOIS choisir les colonnes EXACTEMENT dans cette liste :\n"
-                    f"{available_columns}\n"
-                    f"---------------------------------\n"
-                )
-            )
-            # On ajoute le contexte à notre liste de messages
-            current_messages.append(context_message)
-
+            context_parts.append(f"Des données sont disponibles avec les colonnes : {available_columns}")
         except Exception as e:
             print(f"Avertissement: Impossible d'injecter le contexte des colonnes. Erreur: {e}")
+    
+    # Contexte des tickers dans une comparaison en cours
+    current_tickers = state.get("tickers")
+    if current_tickers and len(current_tickers) > 1:
+        context_parts.append(f"COMPARAISON EN COURS : {current_tickers}")
+        
+        # Déterminer le type de comparaison basé sur le dernier message d'outil
+        last_tool_call = None
+        for msg in reversed(state['messages']):
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    if tool_call['name'] == 'compare_stocks':
+                        last_tool_call = tool_call
+                        break
+                if last_tool_call:
+                    break
+        
+        if last_tool_call:
+            comparison_type = last_tool_call['args'].get('comparison_type', 'price')
+            metric = last_tool_call['args'].get('metric', 'price')
+            period_days = last_tool_call['args'].get('period_days', 252)
+            
+            context_parts.append(f"Type de comparaison actuelle : {comparison_type}")
+            context_parts.append(f"Métrique comparée : {metric}")
+            if comparison_type == 'price':
+                context_parts.append(f"Période : {period_days} jours")
+            
+            context_parts.append(f"""RÈGLES POUR LES DEMANDES DE SUIVI :
+- Si l'utilisateur dit "ajoute [ticker]" ou "rajoute [ticker]" : utilise compare_stocks avec tickers={current_tickers + ['NOUVEAU_TICKER']}, metric='{metric}', comparison_type='{comparison_type}'
+- Si l'utilisateur change la période : utilise compare_stocks avec les mêmes tickers et metric='{metric}', comparison_type='{comparison_type}', mais période différente
+- Si l'utilisateur change la métrique : utilise compare_stocks avec les mêmes tickers mais nouvelle métrique et bon comparison_type""")
+    
+    # Contexte du ticker principal pour analyses individuelles
+    current_ticker = state.get("ticker")
+    if current_ticker and not current_tickers:
+        context_parts.append(f"ANALYSE INDIVIDUELLE EN COURS : {current_ticker}")
+        context_parts.append(f"Si l'utilisateur demande d'analyser un nouveau ticker, tu DOIS faire une nouvelle analyse complète avec fetch_data, preprocess_data, analyze_risks.")
+    
+    if context_parts:
+        context_message = SystemMessage(
+            content=(
+                f"\n\n--- CONTEXTE ACTUEL ---\n"
+                + "\n".join(context_parts) +
+                f"\n---------------------------------\n"
+            )
+        )
+        current_messages.append(context_message)
 
     # On ajoute l'historique de la conversation depuis l'état
     current_messages.extend(state['messages'])
@@ -446,7 +502,7 @@ def execute_tool_node(state: AgentState):
                     price_df, 
                     x=price_df.index, 
                     y='close', 
-                    title=f"Historique du cours de {ticker.upper()} sur {period} jours",
+                    title=f"Historique du cours de `{ticker.upper()}` sur {period} jours",
                     color_discrete_sequence=stella_theme['colors']
 
                 )
@@ -546,16 +602,16 @@ def generate_final_response_node(state: AgentState):
     # Logique de la réponse textuelle basée sur la prédiction
     if analysis_result == "Risque Élevé Détecté":
         response_content = (
-            f"⚠️ **Attention !** Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir (`{next_year_str}`)**.\n\n"
+            f"⚠️ **Attention !** Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}`(dernières données disponibles), mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir (`{next_year_str}`)**.\n\n"
             "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
         )
     elif analysis_result == "Aucun Risque Extrême Détecté":
         response_content = (
-            f"Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir (`{next_year_str}`)**.\n\n"
+            f"Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}`(dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir (`{next_year_str}`)**.\n\n"
             "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
         )
     else:
-        response_content = f"L'analyse des données pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction n'a pas pu être interprété."
+        response_content = f"L'analyse des données pour `{ticker.upper()}` a été effectuée, mais le résultat de la prédiction n'a pas pu être interprété."
 
     # --- 3. Création du graphique de synthèse ---
     chart_json = None
@@ -603,6 +659,7 @@ def generate_final_response_node(state: AgentState):
                     title_text=chart_title,
                     template=stella_theme['template'],
                     font=stella_theme['font'],
+                    **stella_theme['layout_defaults'],  # Applique les paramètres glassmorphism
                     margin=dict(r=320),
                     xaxis=dict(
                         title='Année',
@@ -641,19 +698,6 @@ def generate_final_response_node(state: AgentState):
                 
                 chart_json = pio.to_json(fig)
                 response_content += f"\n\n**Voici une visualisation de sa croissance par rapport à sa valorisation :**"
-                
-                # On crée le texte explicatif et on l'ajoute à la suite
-                explanation_text = textwrap.dedent("""
-                    ---
-                    **Comment interpréter ce graphique ?**
-
-                    Ce graphique croise deux questions clés : "L'entreprise grandit-elle ?" et "Quel prix le marché paie-t-il pour cette croissance ?".
-
-                    *   🟣 **La ligne violette (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
-                    *   🟢 **La ligne verte (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
-
-                    **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne 🟣 qui monte) avec une valorisation qui reste raisonnable (ligne 🟢 stable ou qui monte). Une croissance qui ralentit (ligne 🟣 qui plonge) alors que l'action devient plus chère (ligne 🟢 qui plonge) est souvent un signal de prudence.
-                """)
             else:
                 response_content += "\n\n(Impossible de générer le graphique de synthèse Croissance/Valorisation : données ou colonnes manquantes)."
 
@@ -664,10 +708,8 @@ def generate_final_response_node(state: AgentState):
     # --- 4. Création du message final ---
     final_message = AIMessage(content=response_content)
     if chart_json:
-        # On attache le graphique ET le texte explicatif au message
+        # On attache le graphique au message
         setattr(final_message, 'plotly_json', chart_json)
-        if explanation_text:
-            setattr(final_message, 'explanation_text', explanation_text)
 
     return {"messages": [final_message]}
 

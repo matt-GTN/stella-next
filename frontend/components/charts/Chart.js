@@ -42,30 +42,32 @@ function downloadPngFromPlotlyJson(plotlyJson) {
   }
 }
 
-function Chart({ plotlyJson }) {
+function Chart({ plotlyJson, registerDownloader }) {
   const parsed = useMemo(() => parsePlotlyJson(plotlyJson), [plotlyJson]);
+
+  // Expose a downloader function to parent if requested
+  if (registerDownloader) {
+    try {
+      registerDownloader(() => downloadPngFromPlotlyJson(plotlyJson));
+    } catch (_) {}
+  }
 
   return (
     <div className="w-full">
-      <div className="flex justify-end">
-        <button
-          onClick={() => downloadPngFromPlotlyJson(plotlyJson)}
-          className="mb-2 mr-2 px-2 py-1 text-[11px] border rounded-md text-gray-700 hover:bg-gray-50"
-        >
-          Télécharger PNG
-        </button>
-      </div>
       <Plot
         data={parsed.data}
         layout={{
           ...parsed.layout,
           autosize: true,
           margin: parsed.layout?.margin || { t: 40, r: 20, b: 40, l: 50 },
+          paper_bgcolor: 'rgba(0,0,0,0)', // Background transparent
+          plot_bgcolor: 'rgba(0,0,0,0)',  // Zone de plot transparente
         }}
-        config={{ displayModeBar: true, responsive: true, ...parsed.config }}
+        config={{ displayModeBar: false, displaylogo: false, responsive: true, ...parsed.config }}
         frames={parsed.frames}
         style={{ width: "100%", height: "100%" }}
         useResizeHandler
+        className="w-full h-full"
       />
     </div>
   );

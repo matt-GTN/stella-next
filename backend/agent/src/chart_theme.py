@@ -31,6 +31,13 @@ stella_theme = {
     'font': {
         'family': 'Arial, sans-serif',
         'size': 12,
-        'color': '#333333' # Une couleur de texte sombre mais pas noire pure
+        'color': '#000000' # Couleur noire pour correspondre au texte des messages
+    },
+    
+    # Configuration pour glassmorphism - fonds transparents
+    'layout_defaults': {
+        'paper_bgcolor': 'rgba(0,0,0,0)',  # Background du papier transparent
+        'plot_bgcolor': 'rgba(0,0,0,0)'    # Background de la zone de plot transparent
+        # Note: font configuration is handled by the top-level 'font' key to avoid conflicts
     }
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { message, stream: enableStreaming = false } = await request.json();
+    const { message, session_id, stream: enableStreaming = false } = await request.json();
 
     if (!message) {
       return new Response(
@@ -16,7 +16,7 @@ export async function POST(request) {
 
     // Si streaming n'est pas demandé, utiliser l'ancienne méthode
     if (!enableStreaming) {
-      return handleNonStreamingRequest(message);
+      return handleNonStreamingRequest(message, session_id);
     }
 
     // Configuration SSE
@@ -39,7 +39,7 @@ export async function POST(request) {
     };
 
     // Démarrer le streaming en arrière-plan
-    handleStreamingRequest(message, sendSSE, controller);
+    handleStreamingRequest(message, session_id, sendSSE, controller);
 
     return new Response(responseStream, {
       headers: {
@@ -68,7 +68,7 @@ export async function POST(request) {
 }
 
 // Fonction pour les requêtes non-streaming (fallback)
-async function handleNonStreamingRequest(message) {
+async function handleNonStreamingRequest(message, session_id) {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     
@@ -77,7 +77,7 @@ async function handleNonStreamingRequest(message) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, session_id }),
     });
 
     if (!response.ok) {
@@ -99,8 +99,7 @@ async function handleNonStreamingRequest(message) {
         has_news: !!data.has_news,
         news_data: data.news_data || null,
         has_profile: !!data.has_profile,
-        profile_data: data.profile_data || null,
-        explanation_text: data.explanation_text || null
+        profile_data: data.profile_data || null
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -111,12 +110,12 @@ async function handleNonStreamingRequest(message) {
 }
 
 // Fonction pour gérer le streaming
-async function handleStreamingRequest(message, sendSSE, controller) {
+async function handleStreamingRequest(message, session_id, sendSSE, controller) {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     
     // Appeler l'endpoint SSE réel du backend
-    const response = await fetch(`${backendUrl}/chat/stream/tools`, {
+    const response = await fetch(`${backendUrl}/chat/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -124,7 +123,7 @@ async function handleStreamingRequest(message, sendSSE, controller) {
       },
       body: JSON.stringify({ 
         message: message,
-        // Ajouter d'autres paramètres si nécessaire pour votre backend
+        session_id: session_id // Transmettre l'ID de session au backend
       }),
     });
 
