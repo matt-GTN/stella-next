@@ -55,7 +55,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
           onKeyPress={handleKeyPress}
           placeholder="Tapez votre message... "
           disabled={disabled}
-          className="w-full resize-none rounded-2xl backdrop-blur-xs border border-black/10 px-4 py-3 pr-12 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300/30 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500 text-black"
+          className="w-full resize-none rounded-2xl backdrop-blur-sm border border-black/10 px-4 py-3 pr-12 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300/30 transition-all duration-200 text-sm leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500 text-black"
           style={{
             minHeight: '48px',
             maxHeight: '120px'
@@ -78,7 +78,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
       <motion.button
         type="submit"
         disabled={!message.trim() || disabled}
-        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-900 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-800 hover:bg-gray-900 text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
         whileHover={!disabled && message.trim() ? { scale: 1.05 } : {}}
         whileTap={!disabled && message.trim() ? { scale: 0.95 } : {}}
       >

@@ -46,7 +46,11 @@ export default function ChatMessage({ message }) {
 
   return (
     <motion.div
-      className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} ${
+        isAssistant && (message.has_chart || message.has_dataframe || message.has_news || message.has_profile) 
+          ? 'chat-message-with-chart' 
+          : ''
+      }`}
       layout={false}
     >
       {/* Avatar - uniquement pour l'assistant */}
@@ -213,36 +217,46 @@ export default function ChatMessage({ message }) {
 
             {/* Attached rich content from Stella */}
             {isAssistant && (message.has_chart || message.has_dataframe || message.has_news || message.has_profile) && (
-              <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 relative z-0">
                 {/* Chart display with download option */}
                 {message.has_chart && message.chart_data && (
-                  <div className="col-span-1 lg:col-span-2 w-full relative">
-                    <motion.button
-                      onClick={() => {
-                        chartDownloaders.current[message.id]?.();
-                        setDlDone(true);
-                        setTimeout(() => setDlDone(false), 2000);
+                  <div className="col-span-1 lg:col-span-2 w-full relative z-0">
+                    <div 
+                      className="relative w-full overflow-hidden rounded-xl border border-black/10 bg-white/50 backdrop-blur-sm"
+                      style={{ 
+                        height: '450px',
+                        contain: 'layout style paint',
+                        willChange: 'auto'
                       }}
-                      className="absolute top-2 right-2 z-10 p-1 rounded-full bg-white/70 hover:bg-white/90 shadow-sm transition"
-                      aria-label="Télécharger PNG"
-                      title="Télécharger PNG"
-                      whileTap={{ scale: 0.9 }}
-                      whileHover={{ scale: 1.1 }}
                     >
-                      {dlDone ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <ArrowDownToLine className="w-4 h-4 text-gray-600" />
-                      )}
-                    </motion.button>
-                    <div className="p-3">
-                      <Chart plotlyJson={message.chart_data} registerDownloader={(fn) => { chartDownloaders.current[message.id] = fn; }} />
+                      <motion.button
+                        onClick={() => {
+                          chartDownloaders.current[message.id]?.();
+                          setDlDone(true);
+                          setTimeout(() => setDlDone(false), 2000);
+                        }}
+                        className="absolute top-2 right-2 z-20 p-1 rounded-full bg-white/70 hover:bg-white/90 shadow-sm transition-all duration-150"
+                        aria-label="Télécharger PNG"
+                        title="Télécharger PNG"
+                        whileTap={{ scale: 0.9 }}
+                        whileHover={{ scale: 1.05 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {dlDone ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <ArrowDownToLine className="w-4 h-4 text-gray-600" />
+                        )}
+                      </motion.button>
+                      <div className="p-3 relative z-10 h-full">
+                        <Chart plotlyJson={message.chart_data} registerDownloader={(fn) => { chartDownloaders.current[message.id] = fn; }} />
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {message.has_dataframe && message.dataframe_data && (
-                  <div className="w-full bg-black/5 backdrop-blur-xs rounded-xl border border-black/10 overflow-hidden">
+                  <div className="w-full backdrop-blur-xs rounded-xl border border-black/10 overflow-hidden">
                     <div className="px-3 py-2 text-xs font-medium text-gray-700 border-b border-black/10">Données</div>
                     <div className="p-2">
                       <DataFrameTable dfJson={message.dataframe_data} />

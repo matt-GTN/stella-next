@@ -33,20 +33,19 @@ export default function ChatContainer({ messages, onSendMessage, isLoading }) {
             scrollbarColor: '#a855f7 transparent'
           }}
         >
-        <AnimatePresence initial={false} mode="popLayout">
+        <AnimatePresence initial={false} mode="wait">
           {messages.map((message, index) => (
             <motion.div
               key={`message-${message.id}`}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{
-                duration: 0.3,
-                type: "spring",
-                stiffness: 400,
-                damping: 25
+                duration: 0.2,
+                ease: "easeOut"
               }}
               layout={false}
+              style={{ willChange: "opacity, transform" }}
             >
               <ChatMessage message={message} />
             </motion.div>

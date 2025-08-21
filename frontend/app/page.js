@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import VantaBackground from '@/components/vanta/VantaBackground';
 import ChatNavbar from "@/components/chat/ChatNavbar";
 import ChatContainer from "@/components/chat/ChatContainer";
-import ThreadsBackground from '@/components/ThreadsBackground';
+import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
+import PrismBackground from '@/components/backgrounds/PrismBackground';
+import AuroraBackground from "@/components/backgrounds/AuroraBackground";
 
 
 export default function Home() {
@@ -370,10 +372,10 @@ export default function Home() {
       {/* Background Threads with white threads on dark background */}
       <div className="absolute inset-0 w-full h-full">
         <ThreadsBackground
-          color={[0.204, 1.0, 0.737]}
-          amplitude={1.4}
+          color={[0, 0, 0]} // White threads
+          amplitude={1}
           distance={0}
-          enableMouseInteraction={false}
+          enableMouseInteraction={true}
         />
       </div>
       
@@ -384,7 +386,7 @@ export default function Home() {
       {/* Main chat area with card container */}
       <div className="relative z-20 h-screen flex flex-col pt-24">
         <div className="flex-1 px-4 md:px-8 lg:px-12 py-8">
-          <div className="max-w-4xl mx-auto w-full h-[calc(100vh-8rem)] bg-white/15 backdrop-blur-xs rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
+          <div className="max-w-4xl mx-auto w-full h-[calc(100vh-8rem)] backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
             <ChatContainer 
               messages={messages} 
               onSendMessage={sendMessage}

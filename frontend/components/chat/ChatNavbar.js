@@ -83,7 +83,7 @@ export default function ChatNavbar() {
             onMouseEnter={handleNavbarMouseEnter}
             onMouseLeave={handleNavbarMouseLeave}
           >
-            <div className=" backdrop-blur-sm border border-black/20 rounded-full px-6 py-3 shadow-lg">
+            <div className=" backdrop-blur-xs border border-black/20 rounded-full px-6 py-3 shadow-lg">
               <div className="flex justify-between items-center">
                 {/* Logo et titre à gauche */}
                 <motion.div 
@@ -91,7 +91,7 @@ export default function ChatNavbar() {
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="p-2 rounded-full bg-[#33FFBD]">
+                  <div className="p-2 rounded-full bg-purple-500">
                     <MessageCircle className="h-4 w-4 text-black" />
                   </div>
                   <div>
@@ -104,7 +104,7 @@ export default function ChatNavbar() {
                 {/* 4 panels de navigation */}
                 <div className="flex items-center space-x-1">
                   <motion.button
-                    className="px-4 py-2 rounded-full bg-[#33FFBD] text-black text-sm font-medium hover:bg-black/30 transition-colors"
+                    className="px-4 py-2 rounded-full bg-purple-500 text-black text-sm font-medium hover:bg-purple-500/30 transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -112,7 +112,7 @@ export default function ChatNavbar() {
                   </motion.button>
                   
                   <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-[#33FFBD] transition-colors"
+                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -120,7 +120,7 @@ export default function ChatNavbar() {
                   </motion.button>
                   
                   <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-[#33FFBD] transition-colors"
+                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -128,7 +128,7 @@ export default function ChatNavbar() {
                   </motion.button>
                   
                   <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-[#33FFBD] transition-colors"
+                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -153,7 +153,7 @@ export default function ChatNavbar() {
             onMouseEnter={() => setIsVisible(true)}
           >
             <motion.div
-              className="bg-black/5 backdrop-blur-sm border border-black/10 rounded-b-xl px-8 py-2 shadow-sm cursor-pointer group"
+              className="bg-purple-500/5 backdrop-blur-sm border border-black/10 rounded-b-xl px-8 py-2 shadow-sm cursor-pointer group"
               whileHover={{ scale: 1.05, backgroundColor: "rgba(0,0,0,0.1)" }}
               transition={{ duration: 0.2 }}
             >

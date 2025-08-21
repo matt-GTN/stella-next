@@ -95,7 +95,12 @@ def _create_dynamic_chart_logic(
         else:
             return f"Erreur : Le type de graphique '{chart_type}' n'est pas supporté."
 
-        fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
+        fig.update_layout(
+            template="plotly_white", 
+            font=dict(family="Arial, sans-serif"),
+            xaxis=stella_theme['axis_config'],
+            yaxis=stella_theme['axis_config']
+        )
         return pio.to_json(fig)
 
     except Exception as e:

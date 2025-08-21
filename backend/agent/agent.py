@@ -115,7 +115,7 @@ Tu dois impérativement comprendre et respecter ces deux règles :
 2.  **Analyse du Cours de Bourse (prix de l'action) :** Cette analyse est **DISPONIBLE POUR LES MARCHÉS MONDIAUX** (Europe, Asie, Amériques). Tu peux afficher et comparer les graphiques de prix pour n'importe quelle action, à condition d'avoir le bon ticker (ex: `AIR.PA` pour Airbus, `005930.KS` pour Samsung).
 
 **Liste des outils disponibles**
-1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom. A utiliser uniquement si tu n'es pas totalement sûre du ticker à choisir.
+1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom. **À UTILISER EN DERNIER RECOURS UNIQUEMENT** si tu ne connais vraiment pas le ticker d'une entreprise connue.
 2.  `fetch_data`: Récupère les données financières fondamentales pour un ticker. **RAPPEL : Ne fonctionne que pour les actions américaines.**
 3.  `preprocess_data`: Prépare et nettoie les données financières. **RAPPEL : Ne fonctionne que sur les données américaines.**
 4.  `analyze_risks`: Prédit la performance d'une action. **RAPPEL : Ne fonctionne que sur les données américaines.**
@@ -166,8 +166,8 @@ Je suis Stella 👩🏻, une assistante experte financière créée par une équ
 
 **Séquence d'analyse complète (Actions Américaines Uniquement)**
 Quand un utilisateur te demande une analyse complète, tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS. :
-1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker, et que tu n'es pas sûre du ticker.
-2.  `fetch_data` avec le ticker demandé.
+1.  `search_ticker` UNIQUEMENT si tu ne connais vraiment pas le ticker d'une entreprise bien connue.
+2.  `fetch_data` avec le ticker (que tu connais directement ou que tu as trouvé).
 3.  `preprocess_data` pour nettoyer les données.
 4.  `analyze_risks` pour obtenir un verdict.
 
@@ -179,9 +179,19 @@ Exemples de demandes devant déclencher une analyse complète :
 * "Tu peux m'analyser Apple"
 * "Quels risques d'investissement pour McDonald's ?"
 
-**IDENTIFICATION DU TICKER** 
-Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), et que tu es SÛR de connaître le ticker, tu peux l'utiliser directement.
-Sinon, ton action doit être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
+**IDENTIFICATION DU TICKER - RÈGLE STRICTE** 
+**TU CONNAIS DÉJÀ LES TICKERS DES ENTREPRISES PRINCIPALES :**
+- Apple = AAPL, Microsoft = MSFT, Google/Alphabet = GOOGL, Amazon = AMZN, Tesla = TSLA, Meta = META
+- Netflix = NFLX, Nvidia = NVDA, Coca-Cola = KO, McDonald's = MCD, Disney = DIS, Nike = NKE
+- Bank of America = BAC, JPMorgan = JPM, Goldman Sachs = GS, American Express = AXP
+- Boeing = BA, General Electric = GE, Ford = F, General Motors = GM
+- Et TOUTES les entreprises du Fortune 500 et les grandes entreprises internationales
+
+**UTILISE DIRECTEMENT les tickers que tu connais.** N'utilise `search_ticker` QUE pour des entreprises vraiment obscures ou régionales que tu ne connais pas du tout.
+
+**Actions européennes courantes :**
+- ASML = ASML, LVMH = MC.PA, Airbus = AIR.PA, L'Oréal = OR.PA, Sanofi = SAN.PA
+- Nestlé = NESN.SW, TSMC = TSM, Samsung = 005930.KS
 
 **Analyse et Visualisation Dynamique (Actions Américaines Uniquement) :**
 Quand un utilisateur te demande de "montrer", "visualiser" des métriques spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS :
@@ -196,7 +206,7 @@ Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le R
 1.  **Identifier le type de comparaison :**
     *   Si la métrique est 'price' (prix, cours, performance de l'action), c'est une **comparaison de PRIX**. Elle fonctionne pour TOUTES les actions.
     *   Si la métrique est fondamentale (ROE, dette, marketCap, etc.), c'est une **comparaison FONDAMENTALE**. Elle ne fonctionne que pour les actions AMÉRICAINES. Si l'une des actions n'est pas américaine, tu dois refuser la comparaison et expliquer pourquoi, en proposant de comparer leur prix à la place.
-2.  Si les tickers ne sont pas donnés, utilise `search_ticker` pour chaque nom d'entreprise.
+2.  Si les tickers ne sont pas donnés, utilise directement les tickers des entreprises connues. N'utilise `search_ticker` QUE pour des entreprises vraiment inconnues.
 3.  Utilise l'outil `compare_stocks` en conséquence :
     *   Pour une comparaison **fondamentale** (américaine uniquement) : `comparison_type='fundamental'`, `metric='roe'` (par exemple).
     *   Pour une comparaison de **prix** (mondiale) : `comparison_type='price'`, `metric='price'`.
@@ -506,7 +516,14 @@ def execute_tool_node(state: AgentState):
                     color_discrete_sequence=stella_theme['colors']
 
                 )
-                fig.update_layout(template=stella_theme['template'], font=stella_theme['font'], xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
+                fig.update_layout(
+                    template=stella_theme['template'], 
+                    font=stella_theme['font'], 
+                    xaxis_title="Date", 
+                    yaxis_title="Prix de clôture (USD)",
+                    xaxis=stella_theme['axis_config'],
+                    yaxis=stella_theme['axis_config']
+                )
                 
                 # On convertit en JSON et on met à jour l'état
                 chart_json = pio.to_json(fig)
@@ -544,7 +561,11 @@ def execute_tool_node(state: AgentState):
                     raise ValueError(f"Type de comparaison inconnu: {comparison_type}")
 
                 # Le reste du code est commun et ne change pas
-                fig.update_layout(template="plotly_white")
+                fig.update_layout(
+                    template="plotly_white",
+                    xaxis=stella_theme['axis_config'],
+                    yaxis=stella_theme['axis_config']
+                )
                 chart_json = pio.to_json(fig)
                 current_state_updates["plotly_json"] = chart_json
                 current_state_updates["tickers"] = tickers
@@ -663,7 +684,8 @@ def generate_final_response_node(state: AgentState):
                     margin=dict(r=320),
                     xaxis=dict(
                         title='Année',
-                        type='category' # Force l'axe à traiter les années comme des étiquettes uniques
+                        type='category', # Force l'axe à traiter les années comme des étiquettes uniques
+                        **stella_theme['axis_config']  # Applique la configuration d'axes noirs
                     ),
                     yaxis=dict(
                         title=dict(
@@ -671,7 +693,8 @@ def generate_final_response_node(state: AgentState):
                             font=dict(color=stella_theme['colors'][1])
                         ),
                         tickfont=dict(color=stella_theme['colors'][1]),
-                        ticksuffix=' %'
+                        ticksuffix=' %',
+                        **stella_theme['axis_config']  # Applique la configuration d'axes noirs
                     ),
                     yaxis2=dict(
                         title=dict(
@@ -682,7 +705,8 @@ def generate_final_response_node(state: AgentState):
                         anchor='x',
                         overlaying='y',
                         side='right',
-                        tickformat='.2%'
+                        tickformat='.2%',
+                        **stella_theme['axis_config']  # Applique la configuration d'axes noirs
                     ),
                     legend=dict(
                         orientation="v",
