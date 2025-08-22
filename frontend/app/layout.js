@@ -2,7 +2,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SearchProvider } from "@/contexts/SearchContext";
-import { VisualizationProvider } from "@/contexts/VisualizationContext";
 import "@/app/globals.css";
 
 const geistSans = Geist({
@@ -33,9 +32,7 @@ export default function RootLayout({ children }) {
       >
         <LanguageProvider>
           <SearchProvider>
-            <VisualizationProvider>
-              {children}
-            </VisualizationProvider>
+            {children}
           </SearchProvider>
         </LanguageProvider>
       </body>

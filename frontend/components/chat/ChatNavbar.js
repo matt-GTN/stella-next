@@ -91,8 +91,8 @@ export default function ChatNavbar() {
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="p-2 rounded-full bg-purple-500">
-                    <MessageCircle className="h-4 w-4 text-black" />
+                  <div className="p-2 rounded-full bg-purple-400">
+                    <MessageCircle className="h-4 w-4 text-white" />
                   </div>
                   <div>
                     <h1 className="text-sm font-bold text-black">

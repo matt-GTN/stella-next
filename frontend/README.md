@@ -1,19 +1,36 @@
-# Modern Portfolio Website
+# Stella Financial Analysis Platform
 
-My personal portfolio website built with Next.js 15, featuring interactive 3D backgrounds, glassmorphic design, smooth animations, and intelligent search functionality !
+Advanced AI-powered financial analysis platform built with Next.js 15, featuring interactive workflow visualization, glassmorphic design, and intelligent agent reasoning display.
 
 ## ✨ Features
 
-- **Interactive 3D Background**: Vanta.js bird simulation with customizable parameters and real-time interaction
-- **Glassmorphic UI**: Modern design with backdrop blur effects and transparency layers
-- **Smooth Animations**: Motion library (Framer Motion successor) for page transitions and micro-interactions
-- **Intelligent Search**: Interactive pills with smart search functionality for skills, activities, and destinations
-- **Multilingual Support**: Complete French/English translation system with language detection
-- **Typewriter Effect**: Dynamic role descriptions with realistic typing animation
-- **Modal Navigation**: Floating navbar with detailed content cards for each portfolio section
-- **Responsive Design**: Mobile-first approach optimized for all screen sizes and devices
-- **Modern Tech Stack**: Built with Next.js 15, React 19, Tailwind CSS 4, and Motion 12
-- **Personal Storytelling**: Beyond Code section with travel photos and personal achievements
+### 🎯 Core Platform Features
+- **AI Agent Chat Interface**: Interactive chat with Stella AI for financial analysis
+- **Real-time Tool Execution**: Live display of AI agent tool usage and reasoning
+- **Financial Data Integration**: Stock analysis, news, company profiles, and risk assessment
+- **Multi-language Support**: Complete French/English interface with context-aware translations
+- **Responsive Design**: Optimized for desktop, tablet, and mobile devices
+- **Modern Tech Stack**: Built with Next.js 15, React 19, Tailwind CSS, and Motion
+
+### 🔄 Workflow Visualization System
+- **Inline Graph Visualization**: Expandable workflow graphs within chat messages
+- **Glassmorphic Design**: Transparent backgrounds with backdrop blur effects for modern aesthetics
+- **Interactive Node System**: Click and hover interactions with detailed tool information
+- **Real-time Execution Tracking**: Live updates showing current tool execution status
+- **Advanced Animations**: Smooth transitions, pulsing effects, and flow particles
+- **Keyboard Navigation**: Full accessibility with Tab, Arrow keys, and shortcuts
+- **Performance Optimization**: Virtualization for large workflows (50+ tools)
+- **Edge Case Handling**: Graceful handling of errors, concurrent executions, and complex flows
+- **Responsive Layouts**: Adaptive positioning for different screen sizes
+- **Tool Grouping**: Intelligent categorization by function (data acquisition, processing, visualization)
+
+### 🛠️ Technical Capabilities
+- **Pan & Zoom**: Smooth SVG-based navigation with touch support
+- **State Management**: Advanced tracking of active, executed, and executing states
+- **Error Recovery**: Network error handling with offline support and retry mechanisms
+- **Data Validation**: Comprehensive input validation with fallback structures
+- **Memoization**: Performance optimization through intelligent caching
+- **Accessibility**: ARIA labels, screen reader support, and keyboard navigation
 
 ## 🚀 Quick Start
 
@@ -76,51 +93,158 @@ pnpm dev
 - **Interactive Search** - Smart pill-based search functionality with Google and ChatGPT integration
 - **Language Detection** - Automatic browser language detection with manual toggle
 
+## 🎨 Graph Visualization System
+
+The workflow visualization system is a sophisticated component that transforms backend AI agent tool calls into interactive, visually appealing graphs. This system provides complete transparency into Stella's reasoning process.
+
+### Core Components
+
+#### InlineGraphVisualization
+The main container component that expands within chat messages:
+```jsx
+<InlineGraphVisualization
+  toolCalls={toolExecutions}
+  isExpanded={true}
+  onToggle={() => setExpanded(!expanded)}
+  language="en"
+/>
+```
+
+#### GraphCanvas
+SVG-based rendering engine with pan/zoom capabilities:
+- **Interactive Navigation**: Mouse drag to pan, wheel to zoom
+- **Touch Support**: Pinch-to-zoom and drag on mobile devices
+- **Keyboard Controls**: WASD for pan, +/- for zoom, arrows for node navigation
+- **Virtualization**: Automatic chunking for workflows with 50+ nodes
+
+#### NodeRenderer
+Renders individual workflow nodes with state-based styling:
+- **Node Types**: Start (green), Agent (purple), Tools (blue), Preparation (orange), End (green)
+- **State Animations**: Pulsing for executing, glow for active, checkmarks for completed
+- **Tool Icons**: Specific icons for each tool type (🔍 for search, 📊 for data, etc.)
+- **Responsive Sizing**: Adaptive dimensions for mobile, tablet, and desktop
+
+#### EdgeRenderer
+Creates smooth connections between nodes:
+- **Path Types**: Straight lines, curved paths, and loop connections
+- **Flow Animation**: Moving particles along active execution paths
+- **Conditional Labels**: Display routing conditions and decision points
+- **State Styling**: Different colors and styles for active/inactive/executed edges
+
+### Workflow Node Types
+
+| Type | Purpose | Visual Style | Examples |
+|------|---------|--------------|----------|
+| **Start** | Workflow entry point | Green gradient, smaller size | Workflow initialization |
+| **Agent** | LLM decision making | Purple gradient, larger size | Tool selection, reasoning |
+| **Tool** | Individual tool execution | Blue gradient, tool icons | search_ticker, fetch_data, analyze_risks |
+| **Preparation** | Data processing | Orange gradient, system icons | generate_final_response, cleanup_state |
+| **End** | Workflow completion | Green gradient, smaller size | Final result delivery |
+
+### Tool Categories
+
+Tools are automatically grouped by function for logical layout:
+
+- **Data Acquisition** (Blue): search_ticker, fetch_data, get_stock_news, get_company_profile
+- **Data Processing** (Purple): preprocess_data, analyze_risks
+- **Visualization** (Orange): create_dynamic_chart, display_price_chart, compare_stocks
+- **Data Display** (Green): display_raw_data, display_processed_data
+- **Research** (Red): query_research
+
+### Performance Features
+
+- **Memoization**: Expensive calculations cached for repeated use
+- **Virtualization**: Large workflows split into manageable chunks
+- **Debounced Interactions**: Smooth 60fps pan/zoom operations
+- **Lazy Loading**: Graph data loaded only when visualization expands
+- **Error Boundaries**: Graceful fallback for rendering errors
+
+### Accessibility Features
+
+- **Keyboard Navigation**: Full workflow navigation without mouse
+- **Screen Reader Support**: Comprehensive ARIA labels and descriptions
+- **High Contrast**: Sufficient color contrast for all visual elements
+- **Focus Management**: Clear focus indicators and logical tab order
+- **Reduced Motion**: Respects user preferences for animation
+
 ## 📁 Project Structure
 
 ```
-portfolio/
+stella-frontend/
 ├── app/                    # Next.js App Router
 │   ├── layout.js          # Root layout with fonts and metadata
-│   ├── page.js            # Main homepage component
+│   ├── page.js            # Main chat interface
 │   ├── globals.css        # Global styles with Tailwind imports
-│   └── favicon.ico        # Site favicon
+│   ├── home/              # Landing page
+│   ├── agent-visualization/ # Agent workflow visualization page
+│   ├── modeling/          # Financial modeling interface
+│   ├── research-report/   # Research report generation
+│   └── api/               # API routes for chat and data
 ├── components/            # React components
-│   ├── content/          # Content components for each portfolio section
-│   │   ├── MeContent.js         # About me section with values and background
-│   │   ├── ProjectsContent.js   # Projects showcase with GitHub integration
-│   │   ├── SkillsContent.js     # Skills and expertise by category
-│   │   ├── BeyondCodeContent.js # Personal interests and achievements
-│   │   └── ContactContent.js    # Contact information with copy functionality
-│   ├── svg/              # Custom SVG components and graphics
-│   │   ├── Birds.js             # Bird animation SVG for portfolio project
-│   │   └── Zenyth.js            # Zenyth project logo/icon
-│   ├── vanta/            # Vanta.js 3D background components
-│   │   ├── VantaBackground.js   # Background wrapper component
-│   │   └── _VantaClient.js      # Client-side Vanta component
-│   ├── DetailCard.js     # Modal card component with animations
-│   ├── Navbar.js         # Floating navigation bar with hover effects
-│   ├── NavbarItem.js     # Individual navigation items
-│   ├── Typewriter.js     # Typewriter animation effect
-│   ├── GitHubButton.js   # GitHub repository link button
-│   ├── CallToActionButton.js # Reusable CTA button component
-│   ├── InteractivePill.js # Smart searchable pill component
-│   └── LanguageToggle.js # Language switcher component
+│   ├── chat/             # Chat interface components
+│   │   ├── ChatContainer.js     # Main chat container
+│   │   ├── ChatMessage.js       # Individual message display
+│   │   ├── ChatInput.js         # Message input with controls
+│   │   ├── ChatNavbar.js        # Chat navigation header
+│   │   ├── ToolCall.js          # Tool execution display
+│   │   └── PingingDot.js        # Status indicator
+│   ├── visualization/    # Graph visualization system
+│   │   └── graph/        # Core graph components
+│   │       ├── InlineGraphVisualization.js  # Main graph container
+│   │       ├── GraphCanvas.js               # SVG rendering engine
+│   │       ├── NodeRenderer.js              # Node rendering logic
+│   │       ├── EdgeRenderer.js              # Edge rendering logic
+│   │       ├── GraphHeader.js               # Graph header component
+│   │       ├── GraphControls.js             # Pan/zoom controls
+│   │       ├── NodeDetailsPanel.js          # Node information panel
+│   │       ├── workflowTransformer.js       # Data transformation
+│   │       ├── nodePositioning.js           # Layout algorithms
+│   │       ├── executionTracker.js          # Execution state tracking
+│   │       ├── dataValidation.js            # Input validation
+│   │       ├── edgeCasesHandler.js          # Edge case management
+│   │       ├── networkErrorHandler.js       # Network error handling
+│   │       ├── performanceMonitor.js        # Performance tracking
+│   │       ├── types.js                     # Type definitions
+│   │       └── index.js                     # Component exports
+│   ├── charts/           # Financial chart components
+│   │   └── Chart.js             # Interactive chart display
+│   ├── modeling/         # Financial modeling components
+│   │   ├── PlotlyChart.js       # Advanced chart visualization
+│   │   └── Slider.js            # Parameter adjustment controls
+│   ├── news/             # News display components
+│   │   └── NewsList.js          # News article listing
+│   ├── profile/          # Company profile components
+│   │   └── CompanyProfile.js    # Company information display
+│   ├── tables/           # Data table components
+│   │   └── DataFrameTable.js    # Pandas DataFrame display
+│   ├── backgrounds/      # Background effect components
+│   │   ├── AuroraBackground.js  # Aurora effect
+│   │   ├── PrismBackground.js   # Prism light effect
+│   │   └── ThreadsBackground.js # Thread animation
+│   ├── Flag.js           # Language flag component
+│   ├── GitHubButton.js   # GitHub repository link
+│   ├── InteractivePill.js # Interactive UI elements
+│   ├── LanguageToggle.js # Language switcher
+│   ├── Pill.js           # Basic pill component
+│   └── Spinner.js        # Loading indicator
 ├── contexts/             # React contexts
-│   ├── LanguageContext.js # Language state and translation management
-│   └── SearchContext.js  # Search functionality and engine selection
+│   ├── LanguageContext.js # Language state management
+│   └── SearchContext.js  # Search functionality
 ├── translations/         # Internationalization
-│   └── index.js          # Complete French/English translations
+│   └── index.js          # French/English translations
 ├── utils/               # Utility functions
-│   └── searchConfig.js   # Search configuration and pill intelligence
-├── public/               # Static assets
-│   ├── avatar.png        # Main profile avatar
-│   ├── avatar_stella.png # Stella project avatar
-│   ├── birds.svg         # Bird graphics for animations
-│   ├── sevilla_1.jpg     # Travel photos for Beyond Code carousel
-│   ├── sevilla_2.jpg     # Travel photos for Beyond Code carousel
-│   └── sevilla_3.jpg     # Travel photos for Beyond Code carousel
-└── config files         # Next.js, Tailwind, ESLint, PostCSS configs
+│   ├── messageDataProcessor.js # Chat message processing
+│   └── searchConfig.js         # Search configuration
+├── test/                # Test suite
+│   ├── components/      # Component tests
+│   │   └── visualization/graph/ # Graph component tests
+│   ├── integration/     # Integration tests
+│   ├── visual/          # Visual regression tests
+│   └── setup.js         # Test configuration
+├── public/              # Static assets
+│   ├── avatar.png       # Stella avatar
+│   └── avatar_stella.png # Alternative avatar
+└── config files         # Next.js, Tailwind, ESLint, Vitest configs
 ```
 
 ## 🎨 Key Components
@@ -245,6 +369,205 @@ This project includes Kiro AI assistant integration for enhanced development wor
 
 This project is private and proprietary.
 
+## 📚 Usage Examples
+
+### Basic Graph Visualization Integration
+
+```jsx
+import { InlineGraphVisualization } from '@/components/visualization/graph';
+
+function ChatMessage({ message }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="message">
+      <div className="message-content">{message.text}</div>
+      
+      {message.toolCalls && (
+        <InlineGraphVisualization
+          toolCalls={message.toolCalls}
+          isExpanded={isExpanded}
+          onToggle={() => setIsExpanded(!isExpanded)}
+          language="en"
+        />
+      )}
+    </div>
+  );
+}
+```
+
+### Custom Node Positioning
+
+```jsx
+import { calculateNodePositions, getGroupBoundaries } from '@/components/visualization/graph';
+
+function CustomWorkflowLayout({ nodes, screenWidth, screenHeight }) {
+  const positionedNodes = calculateNodePositions(nodes, screenWidth, screenHeight);
+  const groupBoundaries = getGroupBoundaries(positionedNodes);
+  
+  return (
+    <div className="workflow-layout">
+      {groupBoundaries.map(group => (
+        <div key={group.id} className="tool-group">
+          <h3>{group.label.en}</h3>
+          <div style={{ 
+            left: group.bounds.minX, 
+            top: group.bounds.minY,
+            width: group.bounds.maxX - group.bounds.minX,
+            height: group.bounds.maxY - group.bounds.minY
+          }}>
+            {/* Group visualization */}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Workflow Data Transformation
+
+```jsx
+import { transformWorkflowData } from '@/components/visualization/graph';
+
+async function processAgentResponse(toolCalls) {
+  // Transform backend data for visualization
+  const graphData = transformWorkflowData(toolCalls, -1, 'en');
+  
+  // Access transformed components
+  const { nodes, edges, nodeStates, metadata } = graphData;
+  
+  console.log(`Processed ${nodes.length} nodes and ${edges.length} edges`);
+  console.log(`Active nodes: ${nodeStates.activeNodes.size}`);
+  
+  // Handle edge cases
+  if (metadata.hasEdgeCases) {
+    console.log('Edge cases detected:', metadata.edgeCaseTypes);
+  }
+  
+  return graphData;
+}
+```
+
+### Performance Monitoring
+
+```jsx
+import { usePerformanceMonitor } from '@/components/visualization/graph/performanceMonitor';
+
+function OptimizedGraphComponent({ toolCalls }) {
+  const { monitor } = usePerformanceMonitor('GraphComponent', {
+    toolCallsCount: toolCalls.length
+  });
+  
+  useEffect(() => {
+    const result = monitor.measureAsync('data-processing', async () => {
+      return await processLargeWorkflow(toolCalls);
+    });
+    
+    // Monitor memory usage
+    monitor.monitorMemory('after-processing');
+  }, [toolCalls]);
+  
+  return <GraphVisualization data={processedData} />;
+}
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
+
+# Feature Flags
+NEXT_PUBLIC_ENABLE_GRAPH_VIRTUALIZATION=true
+NEXT_PUBLIC_MAX_VISIBLE_NODES=200
+NEXT_PUBLIC_ENABLE_PERFORMANCE_MONITORING=true
+
+# Visualization Settings
+NEXT_PUBLIC_DEFAULT_LANGUAGE=en
+NEXT_PUBLIC_ENABLE_ANIMATIONS=true
+NEXT_PUBLIC_GRAPH_CACHE_SIZE=50
+```
+
+### Customization Options
+
+#### Graph Styling
+```css
+/* Custom node colors */
+:root {
+  --node-start-color: #10b981;
+  --node-agent-color: #8b5cf6;
+  --node-tool-color: #3b82f6;
+  --node-preparation-color: #f59e0b;
+  --node-error-color: #ef4444;
+}
+
+/* Glassmorphism effects */
+.graph-container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+```
+
+#### Performance Tuning
+```javascript
+// Adjust virtualization thresholds
+const PERFORMANCE_CONFIG = {
+  virtualizationThreshold: 50,
+  chunkSize: 25,
+  maxCacheSize: 100,
+  debounceDelay: 16, // ~60fps
+  throttleLimit: 16
+};
+```
+
+## 🧪 Testing
+
+### Running Tests
+
+```bash
+# Run all tests
+npm run test
+
+# Run specific test suites
+npm run test:components
+npm run test:integration
+npm run test:visual
+
+# Run with coverage
+npm run test:coverage
+
+# Watch mode for development
+npm run test:watch
+```
+
+### Test Structure
+
+- **Unit Tests**: Individual component functionality
+- **Integration Tests**: Component interaction and data flow
+- **Visual Regression Tests**: Screenshot comparison for UI consistency
+- **Performance Tests**: Rendering speed and memory usage
+- **Accessibility Tests**: Keyboard navigation and screen reader support
+
 ## 🤝 Contributing
 
-This is a personal portfolio project. For suggestions or feedback, please reach out through the contact information provided in the portfolio.
+This project is part of the Stella AI financial analysis platform. For contributions:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+
+- Follow the existing code style and patterns
+- Add comprehensive JSDoc comments for new functions
+- Include tests for new components and features
+- Update documentation for API changes
+- Ensure accessibility compliance (WCAG 2.1 AA)
+- Test on multiple screen sizes and devices

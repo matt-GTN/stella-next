@@ -8,17 +8,19 @@ import ChatContainer from "@/components/chat/ChatContainer";
 import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
 import PrismBackground from '@/components/backgrounds/PrismBackground';
 import AuroraBackground from "@/components/backgrounds/AuroraBackground";
-import { useVisualization } from "@/contexts/VisualizationContext";
-
-
 export default function Home() {
-  const { isSidePanelOpen } = useVisualization();
   const [messages, setMessages] = useState([
     {
       id: 'welcome-message-1',
       type: 'assistant',
       content: "👋 Bonjour ! Je suis **Stella**, une assitance IA d'analyse financière. Comment puis-je t'aider aujourd'hui ?",
-      timestamp: new Date()
+      timestamp: new Date(),
+      toolCalls: [],
+      initialContent: '',
+      finalContent: '',
+      phases: [],
+      isStreaming: false,
+      isProcessing: false
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +52,10 @@ export default function Home() {
       isStreaming: true,
       isProcessing: true, // Activer le spinner immédiatement
       statusMessage: null,
-      phases: [] // Historique des phases de traitement
+      phases: [], // Historique des phases de traitement
+      toolCalls: [], // Initialiser le tableau des appels d'outils
+      initialContent: '',
+      finalContent: ''
     };
     
     setMessages(prev => [...prev, initialAssistantMessage]);
@@ -149,7 +154,7 @@ export default function Home() {
                         ...msg,
                         isProcessing: true, // Activer le spinner
                         processingStep: step, // Type d'étape en cours
-                        phases: [...(msg.phases || []), { type: 'status', step, timestamp: new Date() }]
+                        phases: (msg.phases || []).concat([{ type: 'status', step, timestamp: new Date() }])
                       }
                     : msg
                 )
@@ -243,7 +248,7 @@ export default function Home() {
                         isStreaming: false,
                         isProcessing: false, // Arrêter le spinner 
                         currentStatus: null,
-                        phases: [...(msg.phases || []), { type: 'done', content: 'Traitement terminé', timestamp: new Date() }]
+                        phases: (msg.phases || []).concat([{ type: 'done', content: 'Traitement terminé', timestamp: new Date() }])
                       }
                     : msg
                 )
@@ -261,7 +266,7 @@ export default function Home() {
                         isStreaming: false,
                         isProcessing: false, // Arrêter le spinner
                         currentStatus: null,
-                        phases: [...(msg.phases || []), { type: 'error', content: data.message || data.error, timestamp: new Date() }]
+                        phases: (msg.phases || []).concat([{ type: 'error', content: data.message || data.error, timestamp: new Date() }])
                       }
                     : msg
                 )
@@ -278,16 +283,21 @@ export default function Home() {
               };
               
               setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        toolCalls: [...(msg.toolCalls || []), toolCall],
-                        phases: [...(msg.phases || []), { type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }],
-                        sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
-                      }
-                    : msg
-                )
+                prev.map(msg => {
+                  if (msg.id === assistantMessageId) {
+                    // Ensure toolCalls is an array before concatenating
+                    const existingToolCalls = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
+                    const existingPhases = Array.isArray(msg.phases) ? msg.phases : [];
+                    
+                    return { 
+                      ...msg,
+                      toolCalls: existingToolCalls.concat([toolCall]),
+                      phases: existingPhases.concat([{ type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }]),
+                      sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
+                    };
+                  }
+                  return msg;
+                })
               );
             }
             // Gérer autres types de données
@@ -386,7 +396,7 @@ export default function Home() {
       {/* Background Threads with white threads on dark background */}
       <div className="absolute inset-0 w-full h-full">
         <ThreadsBackground
-          color={[0, 0, 0]} // White threads
+          color={[0.6706, 0.2784, 0.7373]} // White threads
           amplitude={1}
           distance={0}
           enableMouseInteraction={true}
@@ -397,29 +407,9 @@ export default function Home() {
       {/* Navbar */}
       <ChatNavbar />
 
-      {/* Main layout with side panel and chat */}
-      <div className="relative z-20 h-screen flex pt-24">
-        {/* Side Panel - intégré dans le layout */}
-        <motion.div
-          initial={false}
-          animate={{ 
-            width: isSidePanelOpen ? '600px' : '0px',
-            opacity: isSidePanelOpen ? 1 : 0
-          }}
-          transition={{
-            type: "spring",
-            damping: 25,
-            stiffness: 300,
-            duration: 0.5
-          }}
-          className="flex-shrink-0 overflow-hidden"
-        >
-          {/* Le contenu du side panel sera rendu ici */}
-          <div id="agent-side-panel-container" className="w-[600px] h-full overflow-auto" />
-        </motion.div>
-        
-        {/* Chat area */}
-        <div className="flex-1 py-8 px-4 min-w-0">
+      {/* Main chat area */}
+      <div className="relative z-20 h-screen pt-24">
+        <div className="py-8 px-4 h-full">
           <div className="max-w-4xl mx-auto w-full h-[calc(100vh-8rem)] backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
             <ChatContainer 
               messages={messages} 
