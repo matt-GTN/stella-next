@@ -83,7 +83,7 @@ export default function ChatNavbar() {
             onMouseEnter={handleNavbarMouseEnter}
             onMouseLeave={handleNavbarMouseLeave}
           >
-            <div className=" backdrop-blur-xs border border-black/20 rounded-full px-6 py-3 shadow-lg">
+            <div className="bg-white/10 backdrop-blur-md border border-black/20 rounded-full px-6 py-3 shadow-lg">
               <div className="flex justify-between items-center">
                 {/* Logo et titre à gauche */}
                 <motion.div 
@@ -91,7 +91,7 @@ export default function ChatNavbar() {
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="p-2 rounded-full bg-purple-400">
+                  <div className="p-2 rounded-full bg-gray-700">
                     <MessageCircle className="h-4 w-4 text-white" />
                   </div>
                   <div>

@@ -809,7 +809,7 @@ def prepare_chart_display_node(state: AgentState):
     print("\n--- AGENT: Préparation du graphique pour l'affichage ---")
     
     # Laisse le LLM générer une courte phrase d'introduction
-    response = ("Voici le graphique demandé : ")
+    response = ("**Voici le graphique demandé :** ")
     
     final_message = AIMessage(content=response)
     setattr(final_message, 'plotly_json', state["plotly_json"])
@@ -832,7 +832,7 @@ def prepare_news_display_node(state: AgentState):
     ticker = state.get("ticker", "l'entreprise")
     company_name = state.get("company_name", ticker)
     
-    response_content = f"Voici les dernières actualités que j'ai trouvées pour **{company_name.title()} ({ticker.upper()})** :"
+    response_content = f"**Voici les dernières actualités que j'ai trouvées pour {company_name.title()} ({ticker.upper()})** :"
     
     final_message = AIMessage(content=response_content)
     

@@ -1,13 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { motion } from "motion/react";
-import VantaBackground from '@/components/vanta/VantaBackground';
+import { useState } from "react";
 import ChatNavbar from "@/components/chat/ChatNavbar";
 import ChatContainer from "@/components/chat/ChatContainer";
 import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
-import PrismBackground from '@/components/backgrounds/PrismBackground';
-import AuroraBackground from "@/components/backgrounds/AuroraBackground";
 export default function Home() {
   const [messages, setMessages] = useState([
     {
@@ -31,7 +27,7 @@ export default function Home() {
     // Générer des IDs uniques et séquentiels
     const userMessageId = `user-${messageCounter}`;
     const assistantMessageId = `assistant-${messageCounter + 1}`;
-    
+
     // Ajouter le message utilisateur
     const userMessage = {
       id: userMessageId,
@@ -39,7 +35,7 @@ export default function Home() {
       content,
       timestamp: new Date()
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
@@ -57,42 +53,42 @@ export default function Home() {
       initialContent: '',
       finalContent: ''
     };
-    
+
     setMessages(prev => [...prev, initialAssistantMessage]);
     setIsLoading(false);
-    
+
     // Incrémenter le compteur pour les prochains messages
     setMessageCounter(prev => prev + 2);
 
     try {
       // Essayer d'abord le streaming SSE
       const useSSE = true; // Changer à false pour utiliser l'ancienne méthode
-      
+
       if (useSSE) {
         await handleSSEStreaming(content, assistantMessageId);
       } else {
         await handleRegularRequest(content, assistantMessageId);
       }
-      
+
     } catch (error) {
       console.error('Erreur lors de l\'envoi du message:', error);
-      
+
       // Message d'erreur
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === assistantMessageId 
-            ? { 
-                ...msg, 
-                content: "❌ Désolée, une erreur s'est produite. Veuillez réessayer dans quelques instants.",
-                isStreaming: false,
-                isProcessing: false // Arrêter le spinner
-              }
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+              ...msg,
+              content: "❌ Désolée, une erreur s'est produite. Veuillez réessayer dans quelques instants.",
+              isStreaming: false,
+              isProcessing: false // Arrêter le spinner
+            }
             : msg
         )
       );
     }
   };
-  
+
   // Fonction pour gérer le streaming SSE
   const handleSSEStreaming = async (content, assistantMessageId) => {
     const response = await fetch('/api/chat', {
@@ -100,10 +96,10 @@ export default function Home() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
-        message: content, 
+      body: JSON.stringify({
+        message: content,
         session_id: sessionId, // Inclure l'ID de session pour maintenir le contexte
-        stream: true 
+        stream: true
       }),
     });
 
@@ -127,19 +123,19 @@ export default function Home() {
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
-            
+
             // Gérer l'ID de session
             if (data.type === 'session_id') {
               console.log('Session ID reçu:', data.session_id);
               setSessionId(data.session_id);
               // Ajouter le sessionId au message assistant actuel
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        sessionId: data.session_id
-                      }
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      sessionId: data.session_id
+                    }
                     : msg
                 )
               );
@@ -147,15 +143,15 @@ export default function Home() {
             // Gérer les messages de statut (phases de l'agent)
             else if (data.type === 'status') {
               const step = data.step || 'processing';
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        isProcessing: true, // Activer le spinner
-                        processingStep: step, // Type d'étape en cours
-                        phases: (msg.phases || []).concat([{ type: 'status', step, timestamp: new Date() }])
-                      }
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      isProcessing: true, // Activer le spinner
+                      processingStep: step, // Type d'étape en cours
+                      phases: (msg.phases || []).concat([{ type: 'status', step, timestamp: new Date() }])
+                    }
                     : msg
                 )
               );
@@ -163,17 +159,17 @@ export default function Home() {
             // Gérer le contenu initial (avant les tool calls)
             else if (data.type === 'initial_content') {
               const newContent = data.chunk || data.content || data.token || '';
-              
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        initialContent: (msg.initialContent || '') + newContent,
-                        isProcessing: false, // Arrêter le spinner lors du streaming de contenu
-                        currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
-                        phases: msg.phases // Garder l'historique des phases
-                      }
+
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      initialContent: (msg.initialContent || '') + newContent,
+                      isProcessing: false, // Arrêter le spinner lors du streaming de contenu
+                      currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
+                      phases: msg.phases // Garder l'historique des phases
+                    }
                     : msg
                 )
               );
@@ -181,17 +177,17 @@ export default function Home() {
             // Gérer le contenu final (après les tool calls)
             else if (data.type === 'final_content') {
               const newContent = data.chunk || data.content || data.token || '';
-              
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        finalContent: (msg.finalContent || '') + newContent,
-                        isProcessing: false, // Arrêter le spinner lors du streaming de contenu
-                        currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
-                        phases: msg.phases // Garder l'historique des phases
-                      }
+
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      finalContent: (msg.finalContent || '') + newContent,
+                      isProcessing: false, // Arrêter le spinner lors du streaming de contenu
+                      currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
+                      phases: msg.phases // Garder l'historique des phases
+                    }
                     : msg
                 )
               );
@@ -199,40 +195,40 @@ export default function Home() {
             // Gérer le contenu streamed réel (réponse du LLM) - fallback pour compatibilité
             else if (data.type === 'content' || data.type === 'token') {
               const newContent = data.chunk || data.content || data.token || '';
-              
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        content: msg.content + newContent,
-                        isProcessing: false, // Arrêter le spinner lors du streaming de contenu
-                        currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
-                        phases: msg.phases // Garder l'historique des phases
-                      }
+
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      content: msg.content + newContent,
+                      isProcessing: false, // Arrêter le spinner lors du streaming de contenu
+                      currentStatus: null, // Effacer le statut en cours lors du streaming de contenu
+                      phases: msg.phases // Garder l'historique des phases
+                    }
                     : msg
                 )
               );
             }
             // Gérer les données finales avec attachments (sans contenu pour éviter duplication)
             else if (data.type === 'final_response' || data.type === 'final_message') {
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg,
-                        isStreaming: false,
-                        isProcessing: false,
-                        has_chart: !!data.has_chart,
-                        chart_data: data.chart_data || null,
-                        has_dataframe: !!data.has_dataframe,
-                        dataframe_data: data.dataframe_data || null,
-                        has_news: !!data.has_news,
-                        news_data: data.news_data || null,
-                        has_profile: !!data.has_profile,
-                        profile_data: data.profile_data || null,
-                        sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
-                      }
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      isStreaming: false,
+                      isProcessing: false,
+                      has_chart: !!data.has_chart,
+                      chart_data: data.chart_data || null,
+                      has_dataframe: !!data.has_dataframe,
+                      dataframe_data: data.dataframe_data || null,
+                      has_news: !!data.has_news,
+                      news_data: data.news_data || null,
+                      has_profile: !!data.has_profile,
+                      profile_data: data.profile_data || null,
+                      sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
+                    }
                     : msg
                 )
               );
@@ -240,16 +236,16 @@ export default function Home() {
             }
             // Gérer la fin du streaming
             else if (data.type === 'done' || data.type === 'finished') {
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg, 
-                        isStreaming: false,
-                        isProcessing: false, // Arrêter le spinner 
-                        currentStatus: null,
-                        phases: (msg.phases || []).concat([{ type: 'done', content: 'Traitement terminé', timestamp: new Date() }])
-                      }
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      isStreaming: false,
+                      isProcessing: false, // Arrêter le spinner 
+                      currentStatus: null,
+                      phases: (msg.phases || []).concat([{ type: 'done', content: 'Traitement terminé', timestamp: new Date() }])
+                    }
                     : msg
                 )
               );
@@ -257,17 +253,17 @@ export default function Home() {
             }
             // Gérer les erreurs
             else if (data.type === 'error') {
-              setMessages(prev => 
-                prev.map(msg => 
-                  msg.id === assistantMessageId 
-                    ? { 
-                        ...msg, 
-                        content: data.message || data.error || "❌ Erreur lors de la génération de la réponse.",
-                        isStreaming: false,
-                        isProcessing: false, // Arrêter le spinner
-                        currentStatus: null,
-                        phases: (msg.phases || []).concat([{ type: 'error', content: data.message || data.error, timestamp: new Date() }])
-                      }
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? {
+                      ...msg,
+                      content: data.message || data.error || "❌ Erreur lors de la génération de la réponse.",
+                      isStreaming: false,
+                      isProcessing: false, // Arrêter le spinner
+                      currentStatus: null,
+                      phases: (msg.phases || []).concat([{ type: 'error', content: data.message || data.error, timestamp: new Date() }])
+                    }
                     : msg
                 )
               );
@@ -276,20 +272,20 @@ export default function Home() {
             // Gérer les appels d'outils
             else if (data.type === 'tool_call' || data.type === 'function_call') {
               console.log('Tool call detected:', data);
-              
+
               const toolCall = {
                 name: data.tool_name || data.function_name || data.name || 'Outil inconnu',
                 args: data.args || data.arguments || {}
               };
-              
-              setMessages(prev => 
+
+              setMessages(prev =>
                 prev.map(msg => {
                   if (msg.id === assistantMessageId) {
                     // Ensure toolCalls is an array before concatenating
                     const existingToolCalls = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
                     const existingPhases = Array.isArray(msg.phases) ? msg.phases : [];
-                    
-                    return { 
+
+                    return {
                       ...msg,
                       toolCalls: existingToolCalls.concat([toolCall]),
                       phases: existingPhases.concat([{ type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }]),
@@ -303,12 +299,12 @@ export default function Home() {
             // Gérer autres types de données
             else {
               console.log('Unknown SSE data type:', data);
-              
+
               if (data.content || data.text || data.message) {
                 const content = data.content || data.text || data.message;
-                setMessages(prev => 
-                  prev.map(msg => 
-                    msg.id === assistantMessageId 
+                setMessages(prev =>
+                  prev.map(msg =>
+                    msg.id === assistantMessageId
                       ? { ...msg, content: msg.content + content }
                       : msg
                   )
@@ -322,7 +318,7 @@ export default function Home() {
       }
     }
   };
-  
+
   // Fonction pour gérer les requêtes normales (fallback)
   const handleRegularRequest = async (content, assistantMessageId) => {
     const response = await fetch('/api/chat', {
@@ -330,10 +326,10 @@ export default function Home() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
-        message: content, 
+      body: JSON.stringify({
+        message: content,
         session_id: sessionId, // Inclure l'ID de session pour maintenir le contexte
-        stream: false 
+        stream: false
       }),
     });
 
@@ -358,33 +354,33 @@ export default function Home() {
     // Simuler le streaming caractère par caractère
     const fullResponse = data.response;
     let currentContent = '';
-    
+
     // Arrêter le spinner dès qu'on commence le streaming de contenu
-    setMessages(prev => 
-      prev.map(msg => 
-        msg.id === assistantMessageId 
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === assistantMessageId
           ? { ...msg, isProcessing: false }
           : msg
       )
     );
-    
+
     for (let i = 0; i < fullResponse.length; i++) {
       currentContent += fullResponse[i];
-      
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === assistantMessageId 
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessageId
             ? { ...msg, content: currentContent, ...attachments }
             : msg
         )
       );
-      
+
       await new Promise(resolve => setTimeout(resolve, 30));
     }
-    
-    setMessages(prev => 
-      prev.map(msg => 
-        msg.id === assistantMessageId 
+
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === assistantMessageId
           ? { ...msg, isStreaming: false, isProcessing: false }
           : msg
       )
@@ -402,17 +398,17 @@ export default function Home() {
           enableMouseInteraction={true}
         />
       </div>
-      
+
 
       {/* Navbar */}
       <ChatNavbar />
 
       {/* Main chat area */}
-      <div className="relative z-20 h-screen pt-24">
-        <div className="py-8 px-4 h-full">
-          <div className="max-w-4xl mx-auto w-full h-[calc(100vh-8rem)] backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
-            <ChatContainer 
-              messages={messages} 
+      <div className="relative h-screen pt-8">
+        <div className="px-4 h-full">
+          <div className="max-w-4xl mx-auto w-full h-full pb-4 backdrop-blur-xs rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
+            <ChatContainer
+              messages={messages}
               onSendMessage={sendMessage}
               isLoading={isLoading}
             />

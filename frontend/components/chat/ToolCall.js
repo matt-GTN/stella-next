@@ -115,8 +115,8 @@ export default function ToolCall({ toolName, args = {} }) {
       <div className="flex flex-row justify-between items-start space-x-3">
         {/* Icône de l'outil + contenu */}
         <div className="flex-row flex gap-3 items-start min-w-0">
-          <div className="w-8 h-8 bg-gray-200/80 rounded-lg flex items-center justify-center flex-shrink-0">
-            <IconComponent className="w-4 h-4 text-gray-600" />
+          <div className="w-8 h-8 bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <IconComponent className="w-4 h-4 text-white" />
           </div>
 
           {/* Contenu de l'appel d'outil */}

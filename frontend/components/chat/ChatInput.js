@@ -78,7 +78,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
       <motion.button
         type="submit"
         disabled={!message.trim() || disabled}
-        className="flex-shrink-0 w-12 h-12 rounded-full bg-purple-400 hover:bg-purple-500 text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+        className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-600 hover:bg-gray-700 text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
         whileHover={!disabled && message.trim() ? { scale: 1.05 } : {}}
         whileTap={!disabled && message.trim() ? { scale: 0.95 } : {}}
       >
