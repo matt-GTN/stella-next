@@ -33,6 +33,10 @@ from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langsmith import Client
 
+# Configuration HTTP pour éviter les timeouts après inactivité
+import httpx
+from datetime import timedelta
+
 # Note: Proxy configuration removed as we're now using OpenRouter directly
 
 
@@ -63,15 +67,39 @@ LANGSMITH_PROJECT = "stella"
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
-# Initialize the LLM with OpenRouter
+# Configure httpx client avec des timeouts robustes pour éviter les blocages
+# Problème résolu : après inactivité, les connexions TCP vers OpenRouter deviennent stale
+httpx_client = httpx.Client(
+    timeout=httpx.Timeout(
+        connect=10.0,    # Timeout pour établir la connexion
+        read=120.0,      # Timeout pour lire la réponse (important pour les LLMs)
+        write=10.0,      # Timeout pour envoyer la requête
+        pool=5.0         # Timeout pour obtenir une connexion du pool
+    ),
+    limits=httpx.Limits(
+        max_connections=10,
+        max_keepalive_connections=5,
+        keepalive_expiry=60.0  # Expire les connexions keep-alive après 60s
+    ),
+    headers={
+        "User-Agent": "Stella-Agent/1.0",
+        "Connection": "close"  # Force la fermeture des connexions après chaque requête
+    }
+)
+
+# Initialize the LLM with OpenRouter avec client httpx configuré
 llm = ChatOpenAI(
     model=OPENROUTER_MODEL,
     api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1",
     temperature=0,
     streaming=True,  # Enable streaming
+    http_client=httpx_client,  # Utilise notre client configuré
+    request_timeout=120,        # Timeout global de 2 minutes
+    max_retries=2,              # Retry en cas de timeout
 )
 print(f"✅ ChatOpenAI initialized with OpenRouter using model: {OPENROUTER_MODEL}")
+print(f"🔧 HTTP client configured with robust timeouts to prevent post-inactivity hangs")
 
 # Objet AgentState pour stocker et modifier l'état de l'agent entre les nœuds
 class AgentState(TypedDict):

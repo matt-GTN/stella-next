@@ -33,6 +33,8 @@ os.chdir(agent_dir)
 # Import your existing agent from the current agent directory
 import agent as agent_module
 from langchain_core.messages import HumanMessage
+from agent import generate_trace_animation_frames
+import base64
 
 # Get the app from the agent module
 stella_agent = agent_module.app
@@ -86,6 +88,15 @@ class ChatResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     error_type: str
+    timestamp: str
+
+class AnimationFrame(BaseModel):
+    description: str
+    image_base64: str
+
+class AnimationFramesResponse(BaseModel):
+    frames: list[AnimationFrame]
+    session_id: str
     timestamp: str
 
 # Health check
@@ -177,6 +188,63 @@ async def chat_with_stella_stream(request: ChatRequest):
             "Access-Control-Allow-Headers": "*",
         }
     )
+
+# Animation frames endpoint
+@app.get("/animation-frames/{session_id}", response_model=AnimationFramesResponse)
+async def get_animation_frames(session_id: str):
+    """
+    Get animation frames for a specific session ID
+    """
+    try:
+        logger.info(f"Generating animation frames for session {session_id}")
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Generate the frames using the existing function
+            frames_data = generate_trace_animation_frames(session_id)
+            
+            if not frames_data:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No animation frames found for session {session_id}. Make sure you've had a recent conversation with Stella."
+                )
+            
+            # Convert frames to the response format
+            animation_frames = []
+            for description, png_bytes in frames_data:
+                # Convert PNG bytes to base64 for JSON transport
+                image_base64 = base64.b64encode(png_bytes).decode('utf-8')
+                animation_frames.append(AnimationFrame(
+                    description=description,
+                    image_base64=f"data:image/png;base64,{image_base64}"
+                ))
+            
+            response = AnimationFramesResponse(
+                frames=animation_frames,
+                session_id=session_id,
+                timestamp=datetime.now().isoformat()
+            )
+            
+            logger.info(f"Successfully generated {len(animation_frames)} animation frames for session {session_id}")
+            return response
+            
+        finally:
+            # Always change back to original directory
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error generating animation frames for session {session_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate animation frames: {str(e)}"
+        )
 
 # Legacy endpoints removed - only /chat/stream is needed now with full agent support
 

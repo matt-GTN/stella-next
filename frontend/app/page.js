@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { motion } from "motion/react";
 import VantaBackground from '@/components/vanta/VantaBackground';
 import ChatNavbar from "@/components/chat/ChatNavbar";
 import ChatContainer from "@/components/chat/ChatContainer";
 import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
 import PrismBackground from '@/components/backgrounds/PrismBackground';
 import AuroraBackground from "@/components/backgrounds/AuroraBackground";
+import { useVisualization } from "@/contexts/VisualizationContext";
 
 
 export default function Home() {
+  const { isSidePanelOpen } = useVisualization();
   const [messages, setMessages] = useState([
     {
       id: 'welcome-message-1',
@@ -124,6 +127,17 @@ export default function Home() {
             if (data.type === 'session_id') {
               console.log('Session ID reçu:', data.session_id);
               setSessionId(data.session_id);
+              // Ajouter le sessionId au message assistant actuel
+              setMessages(prev => 
+                prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { 
+                        ...msg,
+                        sessionId: data.session_id
+                      }
+                    : msg
+                )
+              );
             }
             // Gérer les messages de statut (phases de l'agent)
             else if (data.type === 'status') {
@@ -203,9 +217,7 @@ export default function Home() {
                     ? { 
                         ...msg,
                         isStreaming: false,
-                        isProcessing: false, // Arrêter le spinner
-                        currentStatus: null,
-                        phases: [...(msg.phases || []), { type: 'final', content: 'Analyse terminée', timestamp: new Date() }],
+                        isProcessing: false,
                         has_chart: !!data.has_chart,
                         chart_data: data.chart_data || null,
                         has_dataframe: !!data.has_dataframe,
@@ -213,7 +225,8 @@ export default function Home() {
                         has_news: !!data.has_news,
                         news_data: data.news_data || null,
                         has_profile: !!data.has_profile,
-                        profile_data: data.profile_data || null
+                        profile_data: data.profile_data || null,
+                        sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
                       }
                     : msg
                 )
@@ -270,7 +283,8 @@ export default function Home() {
                     ? { 
                         ...msg,
                         toolCalls: [...(msg.toolCalls || []), toolCall],
-                        phases: [...(msg.phases || []), { type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }]
+                        phases: [...(msg.phases || []), { type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }],
+                        sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
                       }
                     : msg
                 )
@@ -383,9 +397,29 @@ export default function Home() {
       {/* Navbar */}
       <ChatNavbar />
 
-      {/* Main chat area with card container */}
-      <div className="relative z-20 h-screen flex flex-col pt-24">
-        <div className="flex-1 px-4 md:px-8 lg:px-12 py-8">
+      {/* Main layout with side panel and chat */}
+      <div className="relative z-20 h-screen flex pt-24">
+        {/* Side Panel - intégré dans le layout */}
+        <motion.div
+          initial={false}
+          animate={{ 
+            width: isSidePanelOpen ? '600px' : '0px',
+            opacity: isSidePanelOpen ? 1 : 0
+          }}
+          transition={{
+            type: "spring",
+            damping: 25,
+            stiffness: 300,
+            duration: 0.5
+          }}
+          className="flex-shrink-0 overflow-hidden"
+        >
+          {/* Le contenu du side panel sera rendu ici */}
+          <div id="agent-side-panel-container" className="w-[600px] h-full overflow-auto" />
+        </motion.div>
+        
+        {/* Chat area */}
+        <div className="flex-1 py-8 px-4 min-w-0">
           <div className="max-w-4xl mx-auto w-full h-[calc(100vh-8rem)] backdrop-blur-sm rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
             <ChatContainer 
               messages={messages} 

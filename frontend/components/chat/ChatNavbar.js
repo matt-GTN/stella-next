@@ -101,39 +101,57 @@ export default function ChatNavbar() {
                   </div>
                 </motion.div>
 
-                {/* 4 panels de navigation */}
+                {/* Navigation panels */}
                 <div className="flex items-center space-x-1">
-                  <motion.button
-                    className="px-4 py-2 rounded-full bg-purple-500 text-black text-sm font-medium hover:bg-purple-500/30 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Stella
-                  </motion.button>
+                  <Link href="/home">
+                    <motion.button
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Accueil
+                    </motion.button>
+                  </Link>
                   
-                  <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Modélisation
-                  </motion.button>
+                  <Link href="/">
+                    <motion.button
+                      className="px-4 py-2 rounded-full bg-white/20 text-black text-sm font-medium hover:bg-white/30 transition-all duration-200"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Stella
+                    </motion.button>
+                  </Link>
                   
-                  <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Visualisation
-                  </motion.button>
+                  <Link href="/modeling">
+                    <motion.button
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Modélisation
+                    </motion.button>
+                  </Link>
                   
-                  <motion.button
-                    className="px-4 py-2 rounded-full text-black text-sm font-medium hover:bg-purple-500 transition-colors"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    Rapport de recherche
-                  </motion.button>
+                  <Link href="/agent-visualization">
+                    <motion.button
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Visualisation
+                    </motion.button>
+                  </Link>
+                  
+                  <Link href="/research-report">
+                    <motion.button
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Rapport
+                    </motion.button>
+                  </Link>
                 </div>
               </div>
             </div>

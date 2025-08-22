@@ -23,7 +23,7 @@ def fetch_fundamental_data(ticker: str) -> pd.DataFrame:
     BASE_URL = "https://financialmodelingprep.com/api/v3/key-metrics/"
     url = f"{BASE_URL}{ticker}?period=annual&apikey={FMP_API_KEY}"
 
-    response = requests.get(url)
+    response = requests.get(url, timeout=15)  # 15s timeout pour éviter les blocages
     
     if response.status_code == 200:
         data = response.json()

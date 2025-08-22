@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { User, Bot, Copy, Check, ArrowDownToLine } from "lucide-react";
+import { User, Bot, Copy, Check, ArrowDownToLine, Eye, Brain, X } from "lucide-react";
 import { useState, useRef } from "react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,16 +16,28 @@ import NewsList from "@/components/news/NewsList";
 import CompanyProfile from "@/components/profile/CompanyProfile";
 import ToolCall from "./ToolCall";
 import Spinner from "@/components/Spinner";
+import AgentGraphPanel from "@/components/visualization/AgentGraphPanel";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useVisualization } from "@/contexts/VisualizationContext";
 
 // Lazy-load Chart to avoid SSR issues
 const Chart = dynamic(() => import("@/components/charts/Chart"), { ssr: false });
 
 export default function ChatMessage({ message }) {
+  const { language } = useLanguage();
+  const { setIsSidePanelOpen } = useVisualization();
   const [copied, setCopied] = useState(false);
   const [dlDone, setDlDone] = useState(false);
+  const [showVisualization, setShowVisualization] = useState(false);
   const chartDownloaders = useRef({});
   const isUser = message.type === 'user';
   const isAssistant = message.type === 'assistant';
+  
+  // Check if this message has tool calls (indicates agent activity)
+  const hasAgentActivity = isAssistant && (
+    (message.toolCalls && message.toolCalls.length > 0) ||
+    (message.initialContent && message.finalContent) // Agent reasoning + final response
+  );
 
   const copyToClipboard = async (text) => {
     try {
@@ -45,14 +57,15 @@ export default function ChatMessage({ message }) {
   };
 
   return (
-    <motion.div
-      className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} ${
-        isAssistant && (message.has_chart || message.has_dataframe || message.has_news || message.has_profile) 
-          ? 'chat-message-with-chart' 
-          : ''
-      }`}
-      layout={false}
-    >
+    <div className="w-full">
+      <motion.div
+        className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'} ${
+          isAssistant && (message.has_chart || message.has_dataframe || message.has_news || message.has_profile) 
+            ? 'chat-message-with-chart' 
+            : ''
+        }`}
+        layout={false}
+      >
       {/* Avatar - uniquement pour l'assistant */}
       {isAssistant && (
         <motion.div
@@ -276,8 +289,38 @@ export default function ChatMessage({ message }) {
           </div>
         </motion.div>
 
+        {/* Agent Visualization Button */}
+        {hasAgentActivity && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+            className="mt-3 flex justify-start"
+          >
+            <motion.button
+              onClick={() => setShowVisualization(!showVisualization)}
+              className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg border transition-all duration-200 ${
+                showVisualization 
+                  ? 'bg-purple-100 text-purple-800 border-purple-300' 
+                  : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Eye className={`w-3 h-3 transition-transform duration-200 ${
+                showVisualization ? 'rotate-180' : ''
+              }`} />
+              {language === 'fr' 
+                ? (showVisualization ? 'Masquer le processus' : 'Voir le processus de réflexion')
+                : (showVisualization ? 'Hide reasoning process' : 'View reasoning process')
+              }
+            </motion.button>
+          </motion.div>
+        )}
+        
+        
         {/* Timestamp */}
-        <span className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
+        <span className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`} suppressHydrationWarning>
           {formatTime(message.timestamp)}
         </span>
       </div>
@@ -291,6 +334,58 @@ export default function ChatMessage({ message }) {
           <User className="w-4 h-4 text-gray-600" />
         </motion.div>
       )}
-    </motion.div>
+      
+      </motion.div>
+      
+      {/* Agent Visualization Graph - Pleine largeur */}
+      {hasAgentActivity && showVisualization && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          className="w-full mt-4"
+        >
+          <div className="bg-white/30 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
+            {/* Header du graphe */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/20">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  className="w-8 h-8 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center"
+                >
+                  <Brain className="w-4 h-4 text-white" />
+                </motion.div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {language === 'fr' ? 'Processus de Stella' : 'Stella\'s Process'}
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {language === 'fr' ? `${message.toolCalls?.length || 0} outils utilisés` : `${message.toolCalls?.length || 0} tools used`}
+                  </p>
+                </div>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setShowVisualization(false)}
+                className="p-1 rounded-lg hover:bg-white/20 backdrop-blur-sm transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-600" />
+              </motion.button>
+            </div>
+            
+            {/* Contenu du graphe */}
+            <div className="h-80 p-4">
+              <AgentGraphPanel 
+                toolCalls={message.toolCalls || []}
+                currentStep={-1} // Pour l'instant, pas d'animation automatique
+                isPlaying={false}
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
+      
+    </div>
   );
 }

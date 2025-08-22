@@ -1,0 +1,3039 @@
+Directory Structure:
+
+└── ./
+    └── agent
+        ├── pages
+        │   ├── 1_🏠_Accueil.py
+        │   ├── 2_👩🏻_Stella,_analyste.py
+        │   ├── 3_🧠_Modélisation.py
+        │   ├── 4_🎬_Visualisation_de_l'agent.py
+        │   └── 5_📄_Rapport_de_recherche.py
+        ├── src
+        │   ├── analyze.py
+        │   ├── chart_theme.py
+        │   ├── compare_fundamentals.py
+        │   ├── compare_prices.py
+        │   ├── fetch_data.py
+        │   ├── fetch_news.py
+        │   ├── fetch_price.py
+        │   ├── fetch_profile.py
+        │   ├── pdf_research.py
+        │   ├── preprocess.py
+        │   └── search_ticker.py
+        ├── agent.py
+        ├── app.py
+        └── tools.py
+
+
+
+---
+File: /agent/pages/1_🏠_Accueil.py
+---
+
+import streamlit as st
+
+st.set_page_config(page_title="Accueil", page_icon="🏠", layout="wide")
+
+st.title("🏠 Accueil – Assistant Financier IA")
+
+st.info("""
+Bienvenue dans l'interface de présentation de notre projet : **Stella**, votre assistante IA dédiée à l'analyse d'actions.  
+**Voici un aperçu des différentes pages de l'application :**
+""")
+
+with st.container(border=True):
+    st.markdown("## 👩🏻 Stella, analyste")
+    st.markdown("""
+    Discutez avec **Stella**, l'assistante IA. Elle peut :
+    - Analyser les données fondamentales d'une entreprise (USA uniquement)
+    - Prédire son risque de sous-performance
+    - Comparer avec d'autres entreprises ou indices
+    - Et plus encore !
+    """)
+    st.page_link("pages/2_👩🏻_Stella,_analyste.py", label="Accéder à Stella", icon="👉")
+
+with st.container(border=True):
+    st.markdown("## 🧠 Modélisation")
+    st.markdown("""
+    Explorez et ajustez les paramètres d'un **Random Forest Classifier** pour comprendre :
+    - Quels facteurs influencent le plus le risque
+    - Comment améliorer la précision du modèle
+    - Les erreurs types et leur analyse via **SHAP**
+    """)
+    st.page_link("pages/3_🧠_Modélisation.py", label="Accéder à la Modélisation", icon="👉")
+
+with st.container(border=True):
+    st.markdown("## 🎬 Visualisation de l'agent")
+    st.markdown("""
+    Rejouez une exécution de Stella **étape par étape** :
+    - Visualisez le raisonnement de l'IA
+    - Naviguez ou animez les étapes de la décision
+    - Identifiez les outils utilisés et dans quel ordre
+    """)
+    st.page_link("pages/4_🎬_Visualisation_de_l'agent.py", label="Accéder à la Visualisation", icon="👉")
+
+with st.container(border=True):
+    st.markdown("## 📄 Rapport de recherche")
+    st.markdown("""
+    Consultez ou téléchargez le rapport de recherche du projet :
+    - Résumé des objectifs et résultats
+    - Méthodologie utilisée
+    - Recommandations et limites
+    """)
+    st.page_link("pages/5_📄_Rapport_de_recherche.py", label="Accéder au Rapport", icon="👉")
+
+st.markdown("---")
+st.info("💡 Astuce : Vous pouvez toujours revenir ici en cliquant sur **Accueil** dans la barre latérale.")
+
+
+---
+File: /agent/pages/2_👩🏻_Stella,_analyste.py
+---
+
+# app.py
+import streamlit as st
+import os
+import uuid
+import base64
+import pandas as pd
+import plotly.io as pio
+import plotly.graph_objects as go
+from io import StringIO
+import json
+import textwrap
+
+
+from agent import app
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+
+import base64
+import os
+
+# Fonction pour encoder une image locale en Base64
+def get_image_as_base64(path):
+    # Vérifie si le fichier existe
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+STELLA_AVATAR = "agent/assets/avatar_stella.png" # Chemin vers l'avatar de Stella
+
+st.set_page_config(page_title="Assistant financier IA", page_icon="📈", layout="wide")
+st.title("📈 Analyste financier IA")
+
+st.markdown("""
+    <style>
+        /* Cible les éléments de message de chat dans Streamlit */
+        .stChatMessage .st-emotion-cache-1w7qfeb {
+            font-size: 18px; /* Valeur à modifier pour changer la taille de la police */
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- Initialisation du session_state pour les messages et d'un ID de session unique ---
+if "messages" not in st.session_state:
+    welcome_message = textwrap.dedent("""
+    Hello ! Je suis Stella. Je peux t'aider à analyser le potentiel d'une action. Que souhaites-tu faire ?
+    
+    *(Si tu ne sais pas par où démarrer, tu peux me demander de t'expliquer comment je peux t'aider.)*
+    """)
+    st.session_state.messages = [AIMessage(content=welcome_message)]
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+# --- Affichage des messages existant depuis l'historique---
+for i, msg in enumerate(st.session_state.messages):
+    if isinstance(msg, AIMessage):
+        with st.chat_message("assistant", avatar=STELLA_AVATAR):
+            st.markdown(msg.content)
+
+            # Logique pour le DataFrame 
+            if hasattr(msg, 'dataframe_json') and msg.dataframe_json:
+                try:
+                    df = pd.read_json(StringIO(msg.dataframe_json), orient='split')
+                    st.dataframe(df, key=f"df_{i}") 
+                except Exception as e:
+                    st.error(f"Impossible d'afficher le DataFrame : {e}")
+
+            # --- Logique pour les graphiques Plotly ---
+            if hasattr(msg, 'plotly_json') and msg.plotly_json:
+                try:
+                    fig = go.Figure(pio.from_json(msg.plotly_json))
+                    st.plotly_chart(fig, use_container_width=True, key=f"df_{i}")
+                except Exception as e:
+                    st.error(f"Impossible d'afficher le graphique : {e}")
+
+            # --- Logique pour le texte explicatif ---
+            if hasattr(msg, 'explanation_text') and msg.explanation_text:
+                st.markdown(msg.explanation_text)
+
+            # --- Logique pour le profil d'entreprise ---
+            if hasattr(msg, 'profile_json') and msg.profile_json:
+                try:
+                    profile_data = json.loads(msg.profile_json)
+                    if profile_data.get("image"):
+                        # On peut afficher le logo à côté du titre pour un effet pro
+                        st.image(profile_data["image"], width=60)
+                except Exception as e:
+                    print(f"Erreur affichage logo: {e}")
+
+            # --- Logique pour les News ---
+            if hasattr(msg, 'news_json') and msg.news_json:
+                try:
+                    news_articles = json.loads(msg.news_json)
+                    if not news_articles:
+                        st.info("Je n'ai trouvé aucune actualité récente.")
+                    else:
+                        # On ajoute un peu d'espace avant les articles
+                        st.write("---") 
+                        
+                        for article in news_articles:
+                            # On crée deux colonnes : une petite pour l'image, une grande pour le texte
+                            col1, col2 = st.columns([1, 4]) # Ratio 1:4
+
+                            with col1:
+                                # On affiche l'image si elle existe
+                                if article.get('image'):
+                                    st.image(
+                                        article['image'], 
+                                        width=180, # On fixe une largeur pour que les images soient uniformes
+                                        use_container_width='never' # Important pour respecter la largeur fixée
+                                    )
+                                else:
+                                    # Placeholder si pas d'image, pour garder l'alignement
+                                    st.text(" ") 
+
+                            with col2:
+                                # On affiche le titre, la source et le lien
+                                st.markdown(f"**{article['title']}**")
+                                st.caption(f"Source : {article.get('site', 'N/A')}")
+                                st.markdown(f"<small><a href='{article['url']}' target='_blank'>Lire l'article</a></small>", unsafe_allow_html=True)
+                            
+                            # On ajoute un séparateur horizontal entre chaque article pour la clarté
+                            st.divider()
+
+                except Exception as e:
+                    st.error(f"Impossible d'afficher les actualités : {e}")
+
+    elif isinstance(msg, HumanMessage):
+        with st.chat_message("user"):
+            st.write(msg.content)
+
+# --- Gestion de l'input utilisateur ---
+if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? 😊​"):
+    st.session_state.messages.append(HumanMessage(content=prompt))
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    with st.chat_message("assistant", avatar=STELLA_AVATAR):
+        thinking_placeholder = st.empty()
+        thinking_placeholder.write("🧠 Hmm, laisse-moi réfléchir une seconde...")
+
+        inputs = {"messages": st.session_state.messages}
+        config = {"configurable": {"thread_id": st.session_state.session_id}}
+        
+        final_response = None
+        
+        try:
+            # On streame les events pour afficher les étapes en temps réel
+            for event in app.stream(inputs, config=config, stream_mode="values"):
+                last_message = event["messages"][-1]
+                
+                # On vérifie si l'IA a décidé d'appeler un outil
+                if isinstance(last_message, AIMessage) and last_message.tool_calls:
+                    tool_call = last_message.tool_calls[0] # On se concentre sur le premier appel
+                    tool_name = tool_call['name']
+                    tool_args = tool_call['args']
+                    
+                    # --- Outils de recherche initiaux ---
+                    if tool_name == 'search_ticker':
+                        company_name = tool_args.get('company_name', 'l\'entreprise demandée')
+                        thinking_placeholder.write(f"🔍 Parfait, je commence par chercher l'identifiant boursier pour **{company_name}**...")
+                    
+                    elif tool_name == 'get_company_profile':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"ℹ️ D'accord, je rassemble les informations générales (secteur, activité...) pour `{ticker.upper()}`.")
+                    
+                    # --- Outils de récupération de données ---
+                    elif tool_name == 'fetch_data':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📊 Je récupère maintenant les données fondamentales pour `{ticker.upper()}`. Un instant...")
+                        
+                    elif tool_name == 'get_stock_news':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📰 Je consulte les dernières news pour voir ce qui se dit sur `{ticker.upper()}`.")
+
+                    # --- Outils d'analyse complète ---
+                    elif tool_name == 'preprocess_data':
+                        thinking_placeholder.write("⚙️ Les données sont là ! Je les nettoie et calcule quelques indicateurs clés pour mon analyse...")
+                    
+                    elif tool_name == 'analyze_risks':
+                        thinking_placeholder.write("🔮 Je soumets les données à mon modèle de prédiction pour évaluer les risques...")
+                    
+                    elif tool_name == 'query_research':
+                        query = tool_args.get('query', 'la question posée')
+                        thinking_placeholder.write(f"📚 Je consulte le rapport de recherche avec : **'{query}'** en tête ! (Cet outil prend plus de temps que les autres)")
+                    
+                    elif tool_name == 'display_raw_data':
+                        thinking_placeholder.write("📋 Je prépare le tableau des données brutes récupérées pour que tu puisses les consulter.")
+                    
+                    elif tool_name == 'display_processed_data':
+                        thinking_placeholder.write("📊 Je prépare le tableau des données traitées et nettoyées, prêtes pour l'analyse.")
+                    # --- Outils de visualisation (demandés par l'utilisateur) ---
+                    elif tool_name == 'display_price_chart':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📈 Préparation du graphique de l'évolution du prix pour `{ticker.upper()}`...")
+                    
+                    elif tool_name == 'create_dynamic_chart':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        metric = tool_args.get('y_column', 'la métrique demandée')
+                        thinking_placeholder.write(f"🎨 Je construis le graphique personnalisé pour visualiser `{ticker.upper()}`.")
+                        
+                    elif tool_name == 'compare_stocks':
+                        tickers = tool_args.get('tickers', [])
+                        metric = tool_args.get('metric', 'la métrique')
+                        if metric == 'price':
+                             thinking_placeholder.write(f"🚀 Comparaison des performances de `{', '.join(tickers)}`... Je normalise les prix pour un graphique équitable.")
+                        else:
+                             thinking_placeholder.write(f"🔬 Analyse comparative de la métrique **'{metric}'** pour `{', '.join(tickers)}`. Cela peut prendre un moment, je récupère les données pour chaque entreprise.")
+
+                # La réponse finale est la dernière AIMessage SANS appel d'outil
+                if isinstance(last_message, AIMessage) and not last_message.tool_calls:
+                    final_response = last_message
+
+            thinking_placeholder.empty()
+
+            if final_response:
+                st.session_state.messages.append(final_response)
+
+                # On enregistre l'ID de cette conversation pour que la page de visualisation puisse l'utiliser
+                st.session_state.last_run_id = st.session_state.session_id
+                st.toast("✅ Exécution terminée ! Vous pouvez maintenant la visualiser sur la page 'Visualize Run'.")
+            else:
+                fallback_response = AIMessage(content="Désolée, je semble avoir rencontré une erreur en cours de route. Peux-tu réessayer ou reformuler ta demande ?")
+                st.session_state.messages.append(fallback_response)
+        
+        except Exception as e:
+            thinking_placeholder.empty()
+            error_msg = f"Oups ! Une erreur inattendue et un peu technique s'est produite. Voici le détail pour les curieux : {e}"
+            st.error(error_msg)
+            st.session_state.messages.append(AIMessage(content=error_msg))
+            import traceback
+            traceback.print_exc()
+
+        # Rafraîchit la page pour afficher le nouveau message ajouté à l'historique
+        st.rerun()
+
+
+
+---
+File: /agent/pages/3_🧠_Modélisation.py
+---
+
+# Page Modélisation 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px
+import shap
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import os
+import warnings
+
+warnings.filterwarnings('ignore')
+
+
+st.set_page_config(page_title="Modélisation du Risque", layout="wide")
+
+# --- Définition des paramètres du meilleur modèle ---
+OPTIMAL_PARAMS = {
+    'n_estimators': 134,
+    'max_depth': 10,
+    'min_samples_leaf': 1,
+    'max_features': 'log2',
+    'criterion': 'entropy',
+}
+
+# --- Initialisation de st.session_state pour les hyperparamètres ---
+# Cela garantit que les valeurs des sliders persistent et peuvent être réinitialisées.
+if 'hyperparams' not in st.session_state:
+    st.session_state.hyperparams = OPTIMAL_PARAMS.copy()
+
+if 'reset_counter' not in st.session_state:
+    st.session_state.reset_counter = 0
+
+# --- Fonction callback pour le bouton reset ---
+def reset_to_optimal():
+    """Réinitialise les hyperparamètres dans session_state aux valeurs optimales."""
+    st.session_state.hyperparams = OPTIMAL_PARAMS.copy()
+
+# --- Section header ---
+st.title("🧠 Modélisation Interactive : De la Prédiction au Filtrage de Risque")
+st.markdown("""
+Cette page interactive vous emmène au cœur de la partie Modélisation du projet. L'objectif initial : prédire si une action du NASDAQ 100 allait **surperformer le marché (Classe 1)** ou **sous-performer (Classe 0)** en se basant uniquement sur ses données financières fondamentales.
+
+Cependant, nos recherches ont révélé une vérité nuancée mais néanmoins intéressante : s'il est difficile de prédire les "gagnants" avec une certitude absolue, notre modèle s'est avéré **fiable pour identifier les "perdants" potentiels**.
+
+Nous avons donc réorienté notre stratégie. Cet outil n'est pas un preneur de décision, mais un **système de gestion des risques**. Il vous permet de :
+- **Explorer** comment les hyperparamètres d'un `RandomForestClassifier` influencent sa capacité à détecter les risques.
+- **Comprendre** quelles caractéristiques financières (croissance, rentabilité, endettement) sont les plus déterminantes.
+- **Découvrir** comment, en se concentrant sur les prédictions à haute confiance, le modèle devient un filtre de risque très précis.
+""")
+st.info("Ajustez les paramètres, entraînez le modèle, ou cliquez sur 'Réinitialiser' pour revenir à notre configuration la plus performante.")
+
+# --- Loading de la donnée ---
+DATA_PATH = 'notebooks/csv/N100_fundamentals_v3.csv'
+
+@st.cache_data
+def load_and_prep_data(path):
+    # (Le reste de la fonction est inchangé)
+    if not os.path.exists(path) and os.path.exists(os.path.join(os.path.dirname(__file__), '..', path)):
+        path = os.path.join(os.path.dirname(__file__), '..', path)
+    if not os.path.exists(path):
+        st.error(f"Erreur: Le fichier de données est introuvable : `{path}`")
+        return None, None, None, None
+    df = pd.read_csv(path)
+    df = df.sort_values(by='date')
+    df['index'] = df.symbol + '_' + df.calendarYear.astype('string')
+    df = df.set_index('index')
+    df_final = df.dropna()
+    if 'netIncomePerShare' in df_final.columns and 'shareValue' in df_final.columns:
+        df_final['earningsYield'] = df_final['netIncomePerShare'] / df_final['shareValue']
+    columns_to_drop = [
+        'return', 'date_NY', 'date', 'benchmark', 'symbol', 'calendarYear', 'shareValue', 'peRatio_YoY_Growth',
+        'peRatio', 'shareValue_YoY_Growth', 'marketCap_YoY_Growth', 'roe_YoY_Growth', 'roic_YoY_Growth',
+        'netIncomePerShare_YoY_Growth', 'debtToEquity_YoY_Growth', 'netIncomePerShare', 'marginProfit_YoY_Growth'
+    ]
+    df_final = df_final.drop(columns=[col for col in columns_to_drop if col in df_final.columns], errors='ignore')
+    if 'target' not in df_final.columns:
+        st.error("Erreur: La colonne 'target' est manquante.")
+        return None, None, None, None
+    condition = df_final.index.str.contains('2023')
+    X_test = df_final[condition]
+    X_train = df_final[~condition]
+    y_test = X_test.target
+    y_train = X_train.target
+    X_train = X_train.drop('target', axis=1)
+    X_test = X_test.drop('target', axis=1)
+    return X_train, y_train, X_test, y_test
+
+# --- Fonctions helper ---
+def create_plotly_confusion_matrix(cm, title, colorscale):
+    labels = ['Classe 0 (Sous-perf.)', 'Classe 1 (Sur-perf.)']
+    fig = px.imshow(cm, labels=dict(x="Prédiction", y="Vraie Valeur", color="Nombre"), x=labels, y=labels,
+                    text_auto=True, color_continuous_scale=colorscale, title=title)
+    fig.update_layout(xaxis_title="Classe Prédite", yaxis_title="Classe Réelle", yaxis={'autorange': 'reversed'})
+    return fig
+
+@st.cache_data
+def train_and_evaluate(_X_train, _y_train, _X_test, params):
+    model = RandomForestClassifier(random_state=42, **params)
+    model.fit(_X_train, _y_train)
+    return model, model.predict(_X_test), model.predict_proba(_X_test)
+
+def get_shap_explanation(_model, _data_to_explain):
+    explainer = shap.TreeExplainer(_model)
+    return explainer(_data_to_explain)
+
+# --- Logique principale de la page ---
+X_train, y_train, X_test, y_test = load_and_prep_data(DATA_PATH)
+if X_train is None:
+    st.stop()
+
+# Section pour les hyperparamètres
+st.header("⚙️ Configuration des Hyperparamètres")
+st.info("Ajustez les hyperparamètres pour voir leur impact sur la performance. Un modèle plus complexe est-il toujours meilleur ?")
+
+# Le bouton de réinitialisation avec compteur
+if st.button("🔄 Réinitialiser aux Paramètres Optimaux"):
+    st.session_state.hyperparams = OPTIMAL_PARAMS.copy()
+    st.session_state.reset_counter += 1  # Incrémente le compteur pour forcer la recréation des widgets
+    st.rerun()
+
+with st.form("hyperparameter_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Structure de la Forêt")
+        # Utilisation du reset_counter dans les keys pour forcer la recréation
+        n_estimators = st.slider(
+            'Nombre d\'arbres (n_estimators)', 
+            10, 500, 
+            value=st.session_state.hyperparams['n_estimators'],
+            key=f'slider_n_estimators_{st.session_state.reset_counter}',
+            help="Plus d'arbres réduit le surapprentissage, mais augmente le temps de calcul."
+        )
+        max_depth = st.slider(
+            'Profondeur maximale (max_depth)', 
+            3, 30, 
+            value=st.session_state.hyperparams['max_depth'],
+            key=f'slider_max_depth_{st.session_state.reset_counter}',
+            help="Contrôle la complexité de chaque arbre. Une profondeur trop élevée peut mener au surapprentissage."
+        )
+    with col2:
+        st.subheader("Conditions de Division")
+        min_samples_leaf = st.slider(
+            'Échantillons min. par feuille', 
+            1, 20, 
+            value=st.session_state.hyperparams['min_samples_leaf'],
+            key=f'slider_min_samples_leaf_{st.session_state.reset_counter}',
+            help="Exige un nombre minimum d'échantillons dans une feuille, lissant ainsi le modèle."
+        )
+        max_features = st.select_slider(
+            'Caractéristiques max.', 
+            ['sqrt', 'log2', None], 
+            value=st.session_state.hyperparams['max_features'],
+            key=f'slider_max_features_{st.session_state.reset_counter}',
+            help="Nombre de caractéristiques à considérer pour chaque division."
+        )
+        
+        criterion_options = ['gini', 'entropy']
+        criterion = st.selectbox(
+            'Critère de division', 
+            criterion_options, 
+            index=criterion_options.index(st.session_state.hyperparams['criterion']),
+            key=f'slider_criterion_{st.session_state.reset_counter}'
+        )
+
+    submitted = st.form_submit_button("🚀 Entraîner le Modèle")
+
+# Mise à jour du session_state quand le formulaire est soumis
+if submitted:
+    # Mise à jour des hyperparamètres dans le session_state
+    st.session_state.hyperparams = {
+        'n_estimators': n_estimators,
+        'max_depth': max_depth,
+        'min_samples_leaf': min_samples_leaf,
+        'max_features': max_features,
+        'criterion': criterion,
+    }
+    
+    # Entraînement du modèle
+    with st.spinner("Entraînement du modèle en cours..."):
+        st.session_state.model, st.session_state.predictions, st.session_state.probabilities = train_and_evaluate(
+            X_train, y_train, X_test, st.session_state.hyperparams
+        )
+    st.session_state.model_trained = True
+
+st.divider()
+
+if 'model_trained' not in st.session_state:
+    st.info("Veuillez cliquer sur 'Entraîner le Modèle' pour commencer l'analyse.")
+    st.stop()
+
+# --- Performance Globale ---
+st.header("📊 Résultats Globaux sur l'Ensemble de Test (Année 2023)")
+st.info("Analysez la performance globale. Observez la différence de précision et de rappel entre la **Classe 0 (Sous-performance)** et la **Classe 1 (Surperformance)**. Le modèle est-il plus doué pour l'une que pour l'autre ?")
+with st.container(border=True):
+  res_col1, res_col2 = st.columns([1, 1])
+  with res_col1:
+      st.subheader("Rapport de Classification")
+      accuracy = accuracy_score(y_test, st.session_state.predictions)
+      st.metric("Précision (Accuracy)", f"{accuracy:.2%}")
+      st.code(classification_report(y_test, st.session_state.predictions, target_names=['Classe 0 (Sous-perf.)', 'Classe 1 (Sur-perf.)']))
+  with res_col2:
+      st.subheader("Matrice de Confusion Générale")
+      cm = confusion_matrix(y_test, st.session_state.predictions, labels=[0, 1])
+      fig_cm = create_plotly_confusion_matrix(cm, "Matrice de Confusion Générale", "Blues")
+      st.plotly_chart(fig_cm, use_container_width=True)
+
+st.divider()
+
+st.header("👑 Importance des Caractéristiques : L'ADN d'une Décision")
+st.info("Quels sont les indicateurs financiers les plus influents ? Le modèle a appris à raisonner comme un analyste, en se concentrant sur la croissance (`revenuePerShare_YoY_Growth`), la rentabilité (`roic`) et la structure financière (`debtToEquity`).")
+with st.container(border=True):
+  feature_importances = pd.Series(st.session_state.model.feature_importances_, index=X_train.columns).sort_values(ascending=False)
+  fig_imp = px.bar(feature_importances.head(15), orientation='h', title="Top 15 des Caractéristiques les plus Importantes", labels={'value': 'Importance (Gini)', 'index': 'Caractéristique'})
+  fig_imp.update_layout(yaxis={'categoryorder':'total ascending'})
+  st.plotly_chart(fig_imp, use_container_width=True)
+
+st.divider()
+
+# --- Analyse Haute-Confiance ---
+
+st.header("🎯 Le Cœur de la Stratégie : Le Filtrage par la Confiance")
+st.info("""
+C'est ici que la valeur du modèle se révèle. Au lieu de considérer toutes les prédictions, nous ne gardons que celles où le modèle est le plus **sûr de lui**.
+En augmentant le seuil de confiance, nous passons d'un modèle de prédiction générale à un **filtre de risque de haute précision**. Observez comment la précision sur les prédictions restantes (notamment pour la **Classe 0**) augmente drastiquement.
+""")
+with st.container(border=True):
+    confidence_threshold = st.slider("Seuil de confiance pour l'analyse", 0.5, 1.0, 0.7, 0.01, help="Filtre pour n'analyser que les prédictions où la probabilité prédite est supérieure à ce seuil.")
+
+    df_results = X_test.copy()
+    df_results['true_label'] = y_test
+    df_results['prediction'] = st.session_state.predictions
+    df_results['confidence'] = np.max(st.session_state.probabilities, axis=1)
+    df_results['is_correct'] = (df_results['prediction'] == df_results['true_label']).astype(int)
+    high_confidence_df = df_results[df_results['confidence'] > confidence_threshold]
+    hc_col1, hc_col2, hc_col3 = st.columns(3)
+    total_hc, correct_hc = len(high_confidence_df), high_confidence_df['is_correct'].sum()
+    hc_col1.metric("Prédictions à Haute Confiance", f"{total_hc}")
+    hc_col2.metric("Correctes", f"{correct_hc} ({correct_hc/total_hc:.1%})" if total_hc > 0 else "0")
+    hc_col3.metric("Incorrectes", f"{total_hc - correct_hc} ({(total_hc - correct_hc)/total_hc:.1%})" if total_hc > 0 else "0")
+
+st.divider()
+
+if 'high_confidence_df' in locals() and not high_confidence_df.empty:
+    st.subheader(f"Matrice de Confusion (Confiance > {confidence_threshold:.0%})")
+    st.info("Notez la forte réduction des erreurs, en particulier des Faux Positifs (prédire une sous-performance qui n'a pas lieu).")
+    with st.container(border=True):
+        cm_hc = confusion_matrix(high_confidence_df['true_label'], high_confidence_df['prediction'], labels=[0, 1])
+        st.plotly_chart(create_plotly_confusion_matrix(cm_hc, f'Matrice de Confusion (Confiance > {confidence_threshold:.0%})', "Greens"), use_container_width=True)
+st.divider()
+
+# --- Analyse SHAP ---
+st.header("🕵️ Analyse SHAP : Comprendre l'Archétype de l'Entreprise à Risque")
+st.markdown("""
+Même un bon modèle fait des erreurs. L'analyse SHAP nous permet de les disséquer pour comprendre **pourquoi** le modèle s'est trompé sur les cas les plus difficiles (les erreurs à haute confiance). 
+Cela nous aide à définir l'**archétype de l'entreprise à risque** que le modèle a appris à identifier : une combinaison de croissance stagnante, de faible rentabilité et d'une structure financière fragile.
+""")
+
+high_confidence_incorrect_df = high_confidence_df[high_confidence_df['is_correct'] == 0] if 'high_confidence_df' in locals() else pd.DataFrame()
+
+if not high_confidence_incorrect_df.empty:
+    st.warning(f"**{len(high_confidence_incorrect_df)}** erreur(s) trouvée(s) avec une confiance > {confidence_threshold:.0%}. Analyse en cours...")
+    X_to_explain = X_test.loc[high_confidence_incorrect_df.index]
+    
+    # Création d'une clé de cache unique pour les valeurs SHAP
+    error_indices_sorted = sorted(high_confidence_incorrect_df.index.astype(str))
+    cache_key = f"shap_{confidence_threshold}_{hash(tuple(error_indices_sorted))}"
+    
+    # Check si les valeurs SHAP sont déjà en cache
+    if (not hasattr(st.session_state, 'current_shap_key') or 
+        st.session_state.current_shap_key != cache_key):
+        
+        with st.spinner("Calcul des valeurs SHAP pour les erreurs..."):
+            st.session_state.current_shap_explanation = get_shap_explanation(st.session_state.model, X_to_explain)
+            st.session_state.current_shap_key = cache_key
+            st.session_state.current_x_indices = list(X_to_explain.index)
+    
+    shap_explanation = st.session_state.current_shap_explanation
+    
+    # Vérifie si les indices de X_to_explain correspondent à ceux déjà en cache
+    if (hasattr(st.session_state, 'current_x_indices') and 
+        st.session_state.current_x_indices != list(X_to_explain.index)):
+        # Force le recalcul des valeurs SHAP si les indices ne correspondent pas
+        with st.spinner("Recalcul des valeurs SHAP..."):
+            st.session_state.current_shap_explanation = get_shap_explanation(st.session_state.model, X_to_explain)
+            st.session_state.current_shap_key = cache_key
+            st.session_state.current_x_indices = list(X_to_explain.index)
+        shap_explanation = st.session_state.current_shap_explanation
+    
+    st.subheader("Résumé SHAP des Erreurs")
+    st.info("Ce graphique montre les caractéristiques qui ont le plus contribué aux **erreurs** du modèle sur le sous-ensemble filtré. Quelles sont les caractéristiques qui 'trompent' le plus notre modèle ?")
+    fig_summary, ax_summary = plt.subplots()
+    shap.summary_plot(shap_explanation[:,:,1], show=False, plot_type="dot")
+    st.pyplot(fig_summary)
+    plt.clf()
+
+    st.subheader("Analyse Détaillée d'une Erreur Spécifique")
+    st.info("Disséquons une erreur. Le graphique 'force plot' montre les forces (en rouge) qui ont poussé la prédiction vers la classe incorrecte, et les forces (en bleu) qui poussaient dans la bonne direction.")
+    error_choice = st.selectbox(
+        "Choisissez une erreur à inspecter en détail :",
+        options=X_to_explain.index,
+        format_func=lambda idx: f"{idx} (Prédit: {int(high_confidence_incorrect_df.loc[idx, 'prediction'])}, Réel: {int(high_confidence_incorrect_df.loc[idx, 'true_label'])})",
+        key=f"error_select_{cache_key}"
+    )
+    if error_choice:
+        instance_info = high_confidence_incorrect_df.loc[error_choice]
+        st.write(f"**Vraie Classe :** `{int(instance_info['true_label'])}` | **Classe Prédite :** `{int(instance_info['prediction'])}` | **Confiance :** `{instance_info['confidence']:.2%}`")
+        
+        try:
+            error_position = list(X_to_explain.index).index(error_choice)
+            
+            if error_position >= shap_explanation.shape[0]:
+                st.error(f"Erreur critique: Décalage entre les données. Recalcul forcé...")
+                with st.spinner("Recalcul complet des valeurs SHAP..."):
+                    st.session_state.current_shap_explanation = get_shap_explanation(st.session_state.model, X_to_explain)
+                    st.session_state.current_shap_key = cache_key
+                    st.session_state.current_x_indices = list(X_to_explain.index)
+                shap_explanation = st.session_state.current_shap_explanation
+                
+                if error_position < shap_explanation.shape[0]:
+                    single_instance_explanation = shap_explanation[error_position, :, 1]
+                    plt.figure(figsize=(10, 3))
+                    shap.force_plot(single_instance_explanation, matplotlib=True, show=False, text_rotation=15)
+                    plt.tight_layout()
+                    st.pyplot(plt.gcf())
+                    plt.clf()
+                else:
+                    st.error("Impossible de résoudre le problème de décalage des données.")
+            else:
+                single_instance_explanation = shap_explanation[error_position, :, 1]
+                
+                plt.figure(figsize=(10, 3))
+                shap.force_plot(single_instance_explanation, matplotlib=True, show=False, text_rotation=15)
+                plt.tight_layout()
+                st.pyplot(plt.gcf())
+                plt.clf()
+                
+        except (ValueError, IndexError) as e:
+            st.error(f"Erreur lors de l'analyse SHAP pour cette instance: {e}")
+else:
+    st.success(f"✅ Excellent ! Aucune erreur avec une confiance > {confidence_threshold:.0%} n'a été trouvée avec la configuration actuelle.")
+
+
+---
+File: /agent/pages/4_🎬_Visualisation_de_l'agent.py
+---
+
+# agent/pages/1_🎬 Visualisation de l'agent.py
+
+import streamlit as st
+import time
+import os
+import sys
+
+# Astuce pour importer des modules depuis le répertoire parent (agent/)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from agent import generate_trace_animation_frames
+
+# Configuration de la page
+st.set_page_config(layout="wide", page_title="Visualisation de l'agent")
+st.title("🎬 Visualisation de l'agent")
+st.markdown("Visualisez pas à pas le chemin de décision de la dernière conversation avec l'agent.")
+
+# Vérifier si une conversation a déjà eu lieu
+if 'last_run_id' not in st.session_state:
+    st.info("👋 Pour commencer, veuillez avoir une conversation avec l'agent sur la page principale '👩🏻 Stella, analyste'.")
+    st.stop()
+
+# --- Initialisation de l'état de la session pour la visualisation ---
+# On va stocker les frames de l'animation pour ne pas les régénérer à chaque fois
+if 'animation_frames' not in st.session_state:
+    st.session_state.animation_frames = []
+# On stocke l'index de l'étape actuelle
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = 0
+
+# --- Interface de contrôle ---
+st.subheader("Contrôles")
+# On utilise st.columns pour organiser les boutons
+col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 3])
+
+with col1:
+    # Bouton pour charger la trace. Il sera désactivé une fois les frames chargées.
+    load_button = st.button(
+        "Charger la trace de l'exécution", 
+        use_container_width=True, 
+        type="primary",
+        disabled=bool(st.session_state.animation_frames) # Désactivé si les frames sont déjà là
+    )
+
+with col2:
+    # Bouton "Précédent"
+    prev_button = st.button("⬅️", use_container_width=True, disabled=not st.session_state.animation_frames)
+
+with col3:
+    # Bouton "Suivant"
+    next_button = st.button("➡️", use_container_width=True, disabled=not st.session_state.animation_frames)
+
+with col4:
+    # Bouton "Play" pour lancer l'animation automatique
+    play_button = st.button("▶️", use_container_width=True, disabled=not st.session_state.animation_frames)
+
+with col5:
+    # Slider pour la vitesse, utile pour le mode "Play"
+    speed = st.slider(
+        "Vitesse (secondes par étape)", 
+        min_value=0.25, 
+        max_value=3.0, 
+        value=1.0,
+        step=0.25
+    )
+
+# --- Logique de chargement des données ---
+if load_button:
+    last_run_id = st.session_state.last_run_id
+    with st.spinner("Récupération de la trace et génération des images..."):
+        frames = generate_trace_animation_frames(last_run_id)
+        if not frames:
+            st.error("Impossible de récupérer la trace ou de générer les images. Vérifiez les logs du terminal.")
+            st.session_state.animation_frames = []
+            st.session_state.current_step = 0
+        else:
+            st.success(f"Trace trouvée ! {len(frames)} étapes sont prêtes à être visualisées.")
+            st.session_state.animation_frames = frames
+            st.session_state.current_step = 0
+    # On rafraîchit la page pour activer les boutons de contrôle
+    st.rerun()
+
+# --- Logique de navigation manuelle ---
+if prev_button:
+    if st.session_state.current_step > 0:
+        st.session_state.current_step -= 1
+
+if next_button:
+    if st.session_state.current_step < len(st.session_state.animation_frames) - 1:
+        st.session_state.current_step += 1
+
+# --- Conteneurs pour l'affichage ---
+# On les définit ici pour qu'ils existent toujours
+description_placeholder = st.empty()
+image_placeholder = st.empty()
+
+# --- Affichage de l'étape actuelle ---
+if st.session_state.animation_frames:
+    total_steps = len(st.session_state.animation_frames)
+    current_step_index = st.session_state.current_step
+    
+    # Récupérer la description et l'image pour l'étape actuelle
+    description, image_bytes = st.session_state.animation_frames[current_step_index]
+
+    # Afficher la description et le compteur d'étapes
+    description_placeholder.markdown(f"### {description} `(Étape {current_step_index + 1}/{total_steps})`")
+    
+    # Afficher l'image
+    image_placeholder.image(image_bytes, use_container_width=True)
+
+# --- Logique du mode "Play" (animation automatique) ---
+if play_button:
+    total_steps = len(st.session_state.animation_frames)
+    # On commence à l'étape actuelle pour pouvoir reprendre la lecture
+    start_step = st.session_state.current_step
+
+    for i in range(start_step, total_steps):
+        st.session_state.current_step = i
+        
+        description, image_bytes = st.session_state.animation_frames[i]
+        
+        # Mettre à jour les conteneurs
+        description_placeholder.markdown(f"### {description} `(Étape {i + 1}/{total_steps})`")
+        image_placeholder.image(image_bytes, use_container_width=True)
+        
+        # Attendre
+        time.sleep(speed)
+        
+    st.success("🎉 Animation terminée !")
+    # On remet l'index à la dernière étape après l'animation
+    st.session_state.current_step = total_steps - 1
+
+
+---
+File: /agent/pages/5_📄_Rapport_de_recherche.py
+---
+
+# agent/pages/2_📄 Rapport de recherche.py
+
+import streamlit as st
+import streamlit.components.v1 as components
+
+st.set_page_config(layout="wide", page_title="Rapport de recherche")
+
+st.title("📄 Rapport de recherche")
+
+st.info("""
+    Vous pouvez interagir avec le document **directement ci-dessous** :  
+    *(La génération du document peut prendre un peu de temps)*
+""")
+
+
+
+pdf_url = "https://drive.usercontent.google.com/download?id=1iuRySCgm_xMnWsFptM0Ip_g1hnSVOJdV&export=download&authuser=0&confirm=t"
+pdf_embed_code = f"""
+<iframe src="https://docs.google.com/viewer?url={pdf_url}&embedded=true" 
+        style="border: 0; width: 100%; height: 1200px;" 
+        width="100%" 
+        height="1200px" 
+        frameborder="0" 
+        allowfullscreen="true" 
+        mozallowfullscreen="true" 
+        webkitallowfullscreen="true">
+</iframe>
+"""
+
+# Affiche le code HTML de l'iframe
+components.html(pdf_embed_code, height=1250, scrolling=True) 
+
+st.divider()
+
+st.markdown(f"""
+<a href="{pdf_url}" target="_self">
+    <button style="background-color:#34FFBC;color:white;padding:10px 24px;border:none;border-radius:4px;">
+        📄 Télécharger le rapport
+    </button>
+</a>
+""", unsafe_allow_html=True)
+
+
+
+
+---
+File: /agent/src/analyze.py
+---
+
+# src/predict.py
+
+import pandas as pd
+import joblib
+import os
+import numpy as np # Assurez-vous que numpy est importé
+
+# Le chemin vers votre modèle
+MODEL_PATH = 'models/rf_fundamental_classifier.joblib' 
+
+def analyse_risks(processed_data: pd.DataFrame) -> str:
+    """
+    Analyse les données pour détecter un risque de sous-performance.
+    Le modèle est spécialisé pour détecter les signaux négatifs (classe 0).
+    Il renvoie un verdict basé sur une prédiction de classe 0 avec une confiance de plus de 70%.
+    
+    Retours:
+        - "Risque Élevé Détecté": Si la prédiction est '0' avec une confiance > 0.7.
+        - "Aucun Risque Extrême Détecté": Dans tous les autres cas.
+    """
+    print("Chargement du modèle de prédiction...")
+    if not os.path.exists(MODEL_PATH):
+        raise FileNotFoundError(f"Modèle non trouvé à l'emplacement : {MODEL_PATH}")
+    model = joblib.load(MODEL_PATH)
+    
+    print("Préparation des données pour la prédiction...")
+
+    expected_cols = ['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield', 'calendarYear']
+    
+    # S'assure que les colonnes sont dans le bon ordre et que les manquantes sont remplies (avec 0 par ex.)
+    data_for_prediction = processed_data.reindex(columns=expected_cols, fill_value=0)
+    data_for_prediction = data_for_prediction.drop(columns=['calendarYear'], errors='ignore')  # On ne prédit pas sur l'année
+    
+    if data_for_prediction.empty or data_for_prediction.isnull().values.any():
+        raise ValueError("Les données fournies sont vides ou contiennent des valeurs nulles après le reformatage.")
+    
+    print("Exécution de la prédiction...")
+    # On prédit sur la dernière ligne disponible (la plus récente)
+    latest_data_point = data_for_prediction.tail(1)
+
+    # Obtenir la classe prédite (0 ou 1)
+    prediction_class = model.predict(latest_data_point)[0]
+    # Obtenir les probabilités [prob_classe_0, prob_classe_1]
+    probabilities = model.predict_proba(latest_data_point)[0]
+    
+    # Notre règle métier spécifique
+    confidence_in_class_0 = probabilities[0]
+    
+    print(f"Classe prédite: {prediction_class}, Probabilités: [Classe 0: {probabilities[0]:.2f}, Classe 1: {probabilities[1]:.2f}]")
+
+    # Appliquer la logique de décision
+    if prediction_class == 0 and confidence_in_class_0 > 0.7:
+        result = "Risque Élevé Détecté"
+        print(f"VERDICT: {result} (Confiance dans la classe 0 > 70%)")
+    else:
+        result = "Aucun Risque Extrême Détecté"
+        print(f"VERDICT: {result} (La condition de risque élevé n'est pas remplie)")
+        
+    return result
+
+if __name__ == '__main__':
+    # Exemple de test
+    from src.fetch_data import fetch_fundamental_data
+    from src.preprocess import preprocess_financial_data
+    
+    try:
+        # Simulez des données qui pourraient déclencher le cas négatif
+        # Créez un dummy model si vous n'en avez pas un qui produit ce résultat
+        cost_raw = fetch_fundamental_data("COST") # Utilisez un ticker qui fonctionne
+        cost_processed = preprocess_financial_data(cost_raw)
+        cost_prediction = predict_outperformance(cost_processed)
+        print(f"\nPrédiction pour COST: {cost_prediction}")
+    except Exception as e:
+        print(f"Erreur lors de la prédiction pour COST: {e}")
+
+
+---
+File: /agent/src/chart_theme.py
+---
+
+# agent/src/chart_theme.py
+
+# Dictionnaire contenant toutes les préférences graphiques pour les graphiques de Stella.
+stella_theme = {
+
+    'colors': [
+        '#33FFBD', 
+        '#C9B1FF',
+        '#FFB81C',
+        '#8c564b', 
+        '#2ca02c',  
+        '#1f77b4',  
+        '#e377c2',  
+        '#d62728',  
+        '#ff7f0e',  
+    ],
+
+    # Des couleurs spécifiques pour certaines métriques clés.
+    # Utilisé pour le graphique  de synthèse.
+    'metric_colors': {
+        'roe': '#2ca02c',               # Le ROE est un signe de rentabilité -> Vert
+        'debtToEquity': '#d62728',      # La dette est un risque -> Rouge
+        'earningsYield': '#1f77b4',     # Le rendement est une info neutre -> Bleu
+        'marginProfit': '#9467bd',      # La marge est une info de performance -> Violet
+    },
+    
+    # Le modèle de base pour les graphiques.
+    'template': 'plotly_white',
+    
+    # La police de caractères pour tous les textes du graphique.
+    'font': {
+        'family': 'Arial, sans-serif',
+        'size': 12,
+        'color': '#333333' # Une couleur de texte sombre mais pas noire pure
+    }
+}
+
+
+---
+File: /agent/src/compare_fundamentals.py
+---
+
+# agent/src/compare_fundamentals.py
+
+import pandas as pd
+
+# On importe les logiques existantes pour les réutiliser
+from .fetch_data import fetch_fundamental_data
+from .preprocess import preprocess_financial_data
+
+def compare_fundamental_metrics(tickers: list[str], metric: str) -> pd.DataFrame:
+    """
+    Récupère l'historique d'une métrique fondamentale pour plusieurs tickers
+    et les combine dans un seul DataFrame pour une comparaison temporelle.
+    
+    Returns:
+        pd.DataFrame: Un DataFrame où l'index est 'calendarYear' et chaque colonne
+                      est un ticker, contenant les valeurs de la métrique.
+    """
+    all_metrics_series = []
+    
+    for ticker in tickers:
+        try:
+            print(f"Comparaison (Évolution): Récupération des données pour {ticker}...")
+            raw_df = fetch_fundamental_data(ticker)
+            processed_df = preprocess_financial_data(raw_df)
+            
+            # On vérifie que les colonnes nécessaires sont présentes
+            if metric not in processed_df.columns or 'calendarYear' not in processed_df.columns:
+                print(f"Avertissement: Données insuffisantes pour '{metric}' chez {ticker}.")
+                continue
+            
+            # On sélectionne l'évolution de la métrique pour ce ticker
+            metric_series = processed_df.set_index('calendarYear')[metric]
+            metric_series.name = ticker.upper() # Le nom de la série devient le ticker
+            
+            all_metrics_series.append(metric_series)
+
+        except Exception as e:
+            print(f"Erreur lors du traitement de {ticker} pour la comparaison d'évolution: {e}")
+            continue
+            
+    if not all_metrics_series:
+        raise ValueError(f"Impossible de récupérer l'historique de la métrique '{metric}' pour les tickers fournis.")
+        
+    # On combine toutes les séries en un seul DataFrame
+    # L'index (calendarYear) permet d'aligner les données automatiquement
+    combined_df = pd.concat(all_metrics_series, axis=1)
+    
+    # On peut trier par l'index (années) pour s'assurer de l'ordre
+    return combined_df.sort_index()
+
+
+---
+File: /agent/src/compare_prices.py
+---
+
+# agent/src/compare_prices.py
+
+import pandas as pd
+from .fetch_price import fetch_price_history
+
+def compare_price_histories(tickers: list[str], period_days: int = 252) -> pd.DataFrame:
+    """
+    Récupère et normalise les historiques de prix pour plusieurs tickers afin de les comparer.
+    La normalisation est essentielle pour comparer sur une base de 100.
+    """
+    all_normalized_prices = []
+    
+    for ticker in tickers:
+        try:
+            print(f"Comparaison de prix: Récupération pour {ticker}...")
+            price_df = fetch_price_history(ticker, period_days)
+            
+            # Normalisation : (prix actuel / premier prix) * 100
+            normalized_price = (price_df['close'] / price_df['close'].iloc[0]) * 100
+            normalized_price.name = ticker.upper() # On renomme la série avec le nom du ticker
+            all_normalized_prices.append(normalized_price)
+            
+        except Exception as e:
+            print(f"Erreur lors de la récupération des prix pour {ticker}: {e}")
+            continue
+    
+    if not all_normalized_prices:
+        raise ValueError("Impossible de récupérer les données de prix pour la comparaison.")
+    
+    # Concatène toutes les séries normalisées en un seul DataFrame
+    combined_df = pd.concat(all_normalized_prices, axis=1)
+    # Remplit les valeurs manquantes (si les jours de bourse diffèrent)
+    combined_df = combined_df.fillna(method='ffill')
+    
+    return combined_df
+
+
+---
+File: /agent/src/fetch_data.py
+---
+
+# src/fetch_data.py
+
+import requests
+import pandas as pd
+import os
+
+FMP_API_KEY = os.getenv("FMP_API_KEY")
+
+# --- NOUVEAU : Définition d'une exception personnalisée ---
+class APILimitError(Exception):
+    """Exception levée lorsque la clé API est invalide, expirée ou a atteint sa limite."""
+    pass
+
+def fetch_fundamental_data(ticker: str) -> pd.DataFrame:
+    """
+    Récupère les données fondamentales d'une action.
+    Lève une APILimitError si la clé API a un problème ou si la limite est atteinte.
+    Lève une ValueError pour les autres erreurs d'API.
+    """
+    if not FMP_API_KEY:
+        raise ValueError("La clé API FMP_API_KEY n'est pas configurée dans les variables d'environnement.")
+
+    BASE_URL = "https://financialmodelingprep.com/api/v3/key-metrics/"
+    url = f"{BASE_URL}{ticker}?period=annual&apikey={FMP_API_KEY}"
+
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if not data: # Si la réponse est OK mais vide (ex: ticker invalide)
+            raise ValueError(f"Aucune donnée retournée pour le ticker '{ticker}'. Il est peut-être invalide.")
+        return pd.DataFrame(data)
+    else:
+        # --- MODIFICATION CLÉ : Gérer les erreurs spécifiques ---
+        # 401: Unauthorized (clé invalide), 429: Too Many Requests (limite atteinte)
+        if response.status_code in [401, 429]:
+            try:
+                # Essayer de récupérer le message d'erreur de l'API
+                error_message = response.json().get('error', "La limite d'utilisation de la clé API a été atteinte ou la clé est invalide.")
+            except:
+                error_message = "La limite d'utilisation de la clé API a été atteinte ou la clé est invalide."
+            raise APILimitError(error_message)
+        else:
+            # Pour toutes les autres erreurs HTTP
+            raise ValueError(f"Erreur de l'API pour {ticker}: Status {response.status_code}, Réponse: {response.text}")
+
+if __name__ == '__main__':
+    # Example usage for testing
+    try:
+        aapl_data = fetch_fundamental_data("AAPL")
+        print("\nAAPL Data Fetched Successfully!")
+    except ValueError as e:
+        print(f"Error fetching AAPL data: {e}")
+
+    try:
+        xyz_data = fetch_fundamental_data("XYZ")
+        print("\nXYZ Data Fetched Successfully!")
+    except ValueError as e:
+        print(f"Error fetching XYZ data: {e}")
+
+
+---
+File: /agent/src/fetch_news.py
+---
+
+# src/fetch_news.py
+
+import requests
+import os
+import json
+from datetime import datetime, timedelta
+# On peut garder notre exception personnalisée pour la cohérence
+from .fetch_data import APILimitError 
+
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+
+def fetch_recent_news(ticker: str, company_name: str, limit: int = 3) -> str:
+    """
+    Récupère les dernières actualités pour une entreprise en utilisant NewsAPI.
+    Retourne une chaîne de caractères JSON contenant une liste d'articles.
+    """
+    if not NEWS_API_KEY:
+        raise ValueError("La clé API NEWS_API_KEY n'est pas configurée.")
+
+    # NewsAPI préfère les noms d'entreprise aux tickers pour la recherche générale
+    # On nettoie le nom pour de meilleurs résultats (ex: "McDonald's Corporation" -> "McDonald's")
+    search_query = company_name.split(' ')[0].replace(',', '')
+
+    BASE_URL = "https://newsapi.org/v2/everything"
+    
+    # On cherche les nouvelles des 30 derniers jours
+    one_month_ago = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    params = {
+        'q': search_query,          # Le terme de recherche (le nom de l'entreprise)
+        'language': 'fr',           # On peut chercher en français !
+        'from': one_month_ago,
+        'sortBy': 'relevancy',      # On trie par pertinence
+        'apiKey': NEWS_API_KEY,
+        'pageSize': limit           # Le nombre d'articles à retourner
+    }
+
+    try:
+        response = requests.get(BASE_URL, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        articles = data.get("articles", [])
+
+        if not articles:
+            return json.dumps([]) # Retourne une liste vide si rien n'est trouvé
+
+        # --- On adapte le formatage à la structure de NewsAPI ---
+        articles_to_return = []
+        for article in articles:
+            articles_to_return.append({
+                "title": article.get('title'),
+                "site": article.get('source', {}).get('name'), # La source est dans un sous-dictionnaire
+                "url": article.get('url'),
+                "image": article.get('urlToImage') # Le champ s'appelle urlToImage
+            })
+        
+        return json.dumps(articles_to_return)
+
+    except requests.exceptions.HTTPError as http_err:
+        # NewsAPI renvoie des messages d'erreur clairs en cas de problème
+        error_details = http_err.response.json()
+        raise APILimitError(f"Erreur de l'API d'actualités : {error_details.get('message')}")
+    except requests.exceptions.RequestException as req_err:
+        raise APILimitError(f"Impossible de contacter le service d'actualités. Erreur: {req_err}")
+
+
+---
+File: /agent/src/fetch_price.py
+---
+
+# agent/src/fetch_price.py
+
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
+
+def fetch_price_history(ticker: str, period_days: int = 252) -> pd.DataFrame:
+    """
+    Récupère l'historique des prix de clôture pour un ticker sur une période donnée
+    en utilisant la librairie yfinance pour une couverture internationale.
+    
+    Args:
+        ticker (str): Le ticker de l'action (ex: 'AAPL', '005930.KS', 'AIR.PA').
+        period_days (int): Le nombre de jours dans le passé à récupérer.
+        
+    Returns:
+        pd.DataFrame: Un DataFrame avec 'date' en index et 'close' en colonne simple.
+    """
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=period_days)
+        
+        price_df = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=True)
+        
+        if price_df.empty:
+            raise ValueError(f"Aucun historique de prix trouvé pour le ticker '{ticker}'. Il est peut-être invalide ou non listé sur Yahoo Finance.")
+            
+        df_close = price_df[['Close']].copy()
+        
+        # Si les colonnes sont un MultiIndex (ex: [('Close', 'TICKER')]), on l'aplatit.
+        if isinstance(df_close.columns, pd.MultiIndex):
+            df_close.columns = df_close.columns.droplevel(1)
+
+        # Rename the column to 'close' to match the rest of the agent's expectations
+        df_close.rename(columns={'Close': 'close'}, inplace=True)
+        
+        print(f"yfinance: Historique de prix récupéré avec succès pour {ticker}.")
+        return df_close
+
+    except Exception as e:
+        raise ValueError(f"Impossible de traiter les données de prix de yfinance pour {ticker}: {e}")
+
+if __name__ == '__main__':
+    try:
+        samsung_prices = fetch_price_history("005930.KS", period_days=90)
+        print("\nHistorique des prix pour Samsung (005930.KS):")
+        print(samsung_prices.head())
+        # Test the column name
+        print(f"Column name for Samsung: {samsung_prices.columns[0]}")
+
+        airbus_prices = fetch_price_history("AIR.PA", period_days=90)
+        print("\nHistorique des prix pour Airbus (AIR.PA):")
+        print(airbus_prices.head())
+        print(f"Column name for Airbus: {airbus_prices.columns[0]}")
+        
+    except Exception as e:
+        print(f"Erreur: {e}")
+
+
+---
+File: /agent/src/fetch_profile.py
+---
+
+# Fichier: src/fetch_profile.py
+
+import requests
+import os
+import json
+from .fetch_data import APILimitError # On réutilise notre exception personnalisée
+
+FMP_API_KEY = os.getenv("FMP_API_KEY")
+
+def fetch_company_profile(ticker: str) -> str:
+    """
+    Récupère les informations de profil d'une entreprise depuis l'API FMP.
+    Retourne une chaîne de caractères JSON contenant les informations clés.
+    """
+    if not FMP_API_KEY:
+        raise ValueError("La clé API FMP_API_KEY n'est pas configurée.")
+
+    BASE_URL = "https://financialmodelingprep.com/stable/profile/?symbol="
+    url = f"{BASE_URL}{ticker}&apikey={FMP_API_KEY}"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status() # Lève une exception pour les erreurs HTTP
+
+        data = response.json()
+        if not data:
+            raise ValueError(f"Aucun profil trouvé pour le ticker '{ticker}'.")
+
+        # On sélectionne seulement les informations les plus pertinentes
+        # pour éviter de surcharger le LLM.
+        profile_data = data[0] # L'API retourne une liste avec un seul élément
+        
+        key_info = {
+            "companyName": profile_data.get("companyName"),
+            "sector": profile_data.get("sector"),
+            "industry": profile_data.get("industry"),
+            "ceo": profile_data.get("ceo"),
+            "website": profile_data.get("website"),
+            "description": profile_data.get("description"),
+            "fullTimeEmployees": profile_data.get("fullTimeEmployees"),
+            "exchange": profile_data.get("exchangeShortName"),
+            "country": profile_data.get("country"),
+            "image": profile_data.get("image") # 
+        }
+        
+        return json.dumps(key_info)
+
+    except requests.exceptions.RequestException as e:
+        raise APILimitError(f"Erreur de réseau en contactant FMP pour le profil de {ticker}: {e}")
+    except (ValueError, IndexError) as e:
+        # Gère le cas où le ticker est invalide ou la réponse est vide
+        raise ValueError(f"Impossible de traiter la réponse du profil pour {ticker}: {e}")
+
+
+---
+File: /agent/src/pdf_research.py
+---
+
+# agent/src/pdf_research.py
+import os
+import streamlit as st
+from pathlib import Path
+import json
+from typing import List, Dict, Any
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+
+class ResearchPDFHandler:
+    """Gère le traitement et l'interrogation de documents de recherche PDF - optimisé pour le contenu financier/science des données"""
+    
+    def __init__(self, pdf_path: str, persist_directory: str = None):
+        self.pdf_path = pdf_path
+        # Auto-detect environment and set appropriate path
+        if persist_directory is None:
+            if os.path.exists("/app"):  # Docker/production environment
+                self.persist_directory = "/app/chroma_research_db"
+            else:  # Local development environment
+                base_dir = Path(__file__).resolve().parents[2]
+                self.persist_directory = str(base_dir / "chroma_research_db")
+        else:
+            self.persist_directory = persist_directory
+        self.vectorstore = None
+        self.setup_vectorstore()
+    
+    def setup_vectorstore(self):
+        """Initialise ou charge le magasin de vecteurs avec le document de recherche PDF"""
+        try:
+            if os.path.exists(self.persist_directory) and os.listdir(self.persist_directory):
+                # Charge le magasin de vecteurs existant
+                embeddings = HuggingFaceEmbeddings(
+                    model_name="intfloat/multilingual-e5-small",
+                    model_kwargs={'device': 'cpu'},
+                    encode_kwargs={'normalize_embeddings': True}
+                )
+                self.vectorstore = Chroma(
+                    persist_directory=self.persist_directory,
+                    embedding_function=embeddings
+                )
+                print(f"Magasin de vecteurs existant chargé avec {self.vectorstore._collection.count()} documents")
+            else:
+                # Crée un nouveau magasin de vecteurs
+                self._create_new_vectorstore()
+        except Exception as e:
+            raise Exception(f"Erreur lors de la configuration du magasin de vecteurs : {e}")
+    
+    def _create_new_vectorstore(self):
+        """Crée un nouveau magasin de vecteurs à partir du PDF"""
+        try:
+            if not os.path.exists(self.pdf_path):
+                raise FileNotFoundError(f"PDF introuvable à : {self.pdf_path}")
+
+            print("Chargement du document PDF...")
+            loader = PyPDFLoader(self.pdf_path)
+            documents = loader.load()
+
+            if not documents:
+                raise ValueError("PDF chargé mais ne contient aucune page")
+
+            print(f"Chargé {len(documents)} pages du PDF")
+
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=1200,
+                chunk_overlap=300,
+                separators=["\n\n", "\n", ". ", "• ", "- ", " "],
+                length_function=len,
+            )
+            chunks = text_splitter.split_documents(documents)
+
+            print(f"Divisé en {len(chunks)} morceaux")
+
+            for i, chunk in enumerate(chunks):
+                chunk.metadata.update({
+                    "chunk_id": i,
+                    "source": "rapport_de_recherche_financière",
+                    "page_number": chunk.metadata.get("page", 0),
+                    "total_chunks": len(chunks),
+                    "language": "multilingual",
+                    "domain": "financial_data_science"
+                })
+
+            print("Création des embeddings avec le modèle multilingue E5...")
+            embeddings = HuggingFaceEmbeddings(
+                model_name="intfloat/multilingual-e5-small",
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+
+            print("Construction de la base de données vectorielle...")
+            self.vectorstore = Chroma.from_documents(
+                documents=chunks,
+                embedding=embeddings,
+                persist_directory=self.persist_directory
+            )
+            
+            print(f"Base de données vectorielle créée avec succès avec {len(chunks)} morceaux")
+
+        except Exception as e:
+            raise Exception(f"Erreur lors de la création du magasin de vecteurs à partir du PDF : {e}")
+    
+    def search_research(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        """Recherche des informations pertinentes dans le document de recherche"""
+        try:
+            if not self.vectorstore:
+                raise ValueError("Magasin de vecteurs non initialisé")
+
+            relevant_docs = self.vectorstore.similarity_search_with_score(query, k=k)
+
+            results = []
+            for doc, score in relevant_docs:
+                results.append({
+                    "content": doc.page_content,
+                    "metadata": doc.metadata,
+                    "relevance_score": float(score),
+                    "page": doc.metadata.get("page", "Inconnu"),
+                    "chunk_id": doc.metadata.get("chunk_id", 0)
+                })
+
+            return results
+
+        except Exception as e:
+            raise Exception(f"Erreur lors de la recherche dans le document de recherche : {e}")
+    
+    def get_document_stats(self) -> Dict[str, Any]:
+        """Obtient des statistiques sur le document chargé"""
+        if not self.vectorstore:
+            return {"error": "Magasin de vecteurs non initialisé"}
+        
+        try:
+            total_chunks = self.vectorstore._collection.count()
+            return {
+                "total_chunks": total_chunks,
+                "pdf_path": self.pdf_path,
+                "language": "multilingual",
+                "domain": "Financial Data Science",
+                "model": "intfloat/multilingual-e5-small"
+            }
+        except:
+            return {"error": "Impossible de récupérer les statistiques du document"}
+
+    @staticmethod
+    @st.cache_resource
+    def initialize_research_handler():
+        """Initialise le gestionnaire de recherche - à appeler au démarrage de l'application"""
+        try:
+            base_dir = Path(__file__).resolve().parents[2]
+            research_pdf_path = base_dir / "reports" / "Rapport de projet - OPA - NOV24-CDS.pdf"
+            if os.path.exists(research_pdf_path):
+                research_handler = ResearchPDFHandler(str(research_pdf_path))
+                print("Gestionnaire de recherche initialisé avec succès")
+                return research_handler
+            else:
+                raise FileNotFoundError(f"PDF de recherche introuvable à : {research_pdf_path}")
+        except Exception as e:
+            raise Exception(f"Échec de l'initialisation du gestionnaire de recherche : {e}")
+
+# Global variable to store the research handler
+_research_handler = None
+
+def query_research_document(query: str, max_results: int = 5) -> str:
+    """
+    Interroge le document de recherche et renvoie les résultats formatés
+    Amélioré pour le contenu de la science des données financières
+    """
+    global _research_handler
+    
+    # Lazy initialization - only create when actually needed
+    if _research_handler is None:
+        try:
+            _research_handler = ResearchPDFHandler.initialize_research_handler()
+        except Exception as e:
+            return f"Erreur lors de l'initialisation du gestionnaire de recherche : {str(e)}"
+
+    if not _research_handler:
+        return "Document de recherche non disponible. Veuillez vous assurer que le PDF est correctement chargé."
+
+    try:
+        results = _research_handler.search_research(query, k=max_results)
+
+        if not results:
+            return f"Aucune information pertinente trouvée dans le document de recherche pour : '{query}'"
+
+        response_parts = [
+            f"D'après notre rapport de recherche en analyse financière, voici ce que j'ai trouvé concernant '{query}' :\n"
+        ]
+
+        for i, result in enumerate(results[:3], 1):
+            page_info = f"(Page {result['page']})" if result['page'] != "Inconnu" else ""
+            relevance = f"(Score : {result['relevance_score']:.3f})" if result['relevance_score'] < 1.0 else ""
+            
+            response_parts.append(
+                f"**{i}. Résultat de recherche {page_info} {relevance} :**\n"
+                f"{result['content']}\n"
+            )
+
+        response_parts.append(
+            f"\n*Ces informations proviennent de notre rapport interne sur l'analyse fondamentale financière "
+            f"par approche Data Science (affichage des {min(3, len(results))} résultats les plus pertinents).*"
+        )
+
+        return "\n".join(response_parts)
+
+    except Exception as e:
+        return f"Erreur lors de l'accès au document de recherche : {str(e)}"
+
+def search_financial_concepts(concept: str) -> str:
+    """Fonction d'assistance pour rechercher des concepts financiers/science des données spécifiques"""
+    financial_queries = {
+        "ratios financiers": "ratios financiers analyse fondamentale",
+        "modèles prédictifs": "modèles prédictifs machine learning finance",
+        "analyse technique": "analyse technique indicateurs financiers",
+        "données financières": "données financières sources preprocessing",
+        "performance": "performance évaluation modèles financiers"
+    }
+    
+    query = financial_queries.get(concept.lower(), concept)
+    return query_research_document(query, max_results=4)
+
+
+---
+File: /agent/src/preprocess.py
+---
+
+# src/preprocess.py
+
+import pandas as pd
+
+def preprocess_financial_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Préprocesse les données financières brutes.
+    Le DataFrame retourné contient les features pour le modèle ET des colonnes supplémentaires
+    comme 'calendarYear' pour la visualisation.
+    """
+    df_processed = df.copy()
+    
+    # On garde une trace de l'année pour la visualisation
+    df_processed['calendarYear'] = df_processed['calendarYear'].astype(str)
+
+    # On crée l'index pour la cohérence
+    df_processed = df_processed.set_index(df_processed['symbol'] + '_' + df_processed['calendarYear'])
+
+    # Calculs
+    df_processed['marginProfit'] = df_processed['netIncomePerShare'] / df_processed['revenuePerShare']
+    df_processed = df_processed.sort_values(by='calendarYear')
+    df_processed['revenuePerShare_YoY_Growth'] = ((df_processed['revenuePerShare'] / df_processed['revenuePerShare'].shift(1)) - 1) * 100
+    
+    # Sélection des colonnes finales "riches"
+    final_cols = [
+        'calendarYear', 'marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 
+        'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield'
+    ]
+    
+    # On s'assure de ne pas sélectionner des colonnes qui n'existeraient pas dans les données brutes
+    available_cols = [col for col in final_cols if col in df_processed.columns]
+    
+    df_processed = df_processed[available_cols].dropna()
+
+    print(f"Données preprocess :\n{df_processed.head()}")
+    return df_processed
+
+
+---
+File: /agent/src/search_ticker.py
+---
+
+# src/search_ticker.py
+
+import requests
+import os
+from .fetch_data import APILimitError
+
+FMP_API_KEY = os.getenv("FMP_API_KEY")
+
+def search_ticker(company_name: str) -> str:
+    """
+    Recherche le ticker le plus pertinent pour un nom d'entreprise donné,
+    en priorisant les marchés américains (NYSE, NASDAQ) et la devise USD.
+    """
+    if not FMP_API_KEY:
+        raise ValueError("La clé API FMP_API_KEY n'est pas configurée.")
+
+    BASE_URL = "https://financialmodelingprep.com/api/v3/search"
+    # On augmente la limite pour avoir plus de choix
+    params = {'limit': 10, 'apikey': FMP_API_KEY}
+
+    try:
+        # Essai 1: Recherche stricte avec un espace pour éviter les correspondances partielles (ex: "Intel" vs "Inteliquent").
+        precise_query = f"{company_name} "
+        params['query'] = precise_query
+        
+        print(f"Tentative de recherche stricte avec : '{precise_query}'")
+        response = requests.get(BASE_URL, params=params, timeout=10)
+        response.raise_for_status()
+        results = response.json()
+
+        # Essai 2: Si la recherche stricte ne donne rien, on tente une recherche plus large sans l'espace.
+        if not results:
+            print(f"Recherche stricte sans succès. Tentative de recherche large avec : '{company_name}'")
+            params['query'] = company_name
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            results = response.json()
+
+        if not results:
+            raise APILimitError(f"Désolé, je n'ai trouvé aucune entreprise correspondant à '{company_name}'.")
+        
+        # On définit des listes de priorité pour les bourses et les devises
+        preferred_exchanges = ["PAR", "KS", "NYSE", "NASDAQ"]
+        preferred_currency = "USD"
+        
+        best_ticker = None
+        
+        # Stratégie 1: On cherche le match parfait (bourse + devise)
+        for stock in results:
+            if stock.get('exchangeShortName') in preferred_exchanges and stock.get('currency') == preferred_currency:
+                best_ticker = stock
+                print(f"Match prioritaire trouvé : {best_ticker['symbol']} sur {best_ticker['exchangeShortName']}")
+                break # On a trouvé le meilleur, on arrête de chercher
+
+        # Stratégie 2: Si aucun match parfait, on cherche un ticker sur une bourse américaine
+        if not best_ticker:
+            for stock in results:
+                if stock.get('exchangeShortName') in preferred_exchanges:
+                    best_ticker = stock
+                    print(f"Match de bourse trouvé : {best_ticker['symbol']} sur {best_ticker['exchangeShortName']}")
+                    break
+
+        # Stratégie 3: Si toujours rien, on prend le premier résultat comme avant (plan de secours)
+        if not best_ticker:
+            best_ticker = results[0]
+            print(f"Aucun match prioritaire trouvé. Utilisation du premier résultat : {best_ticker['symbol']}")
+
+        final_ticker = best_ticker.get('symbol')
+        found_name = best_ticker.get('name')
+
+        print(f"Ticker sélectionné pour '{company_name}': {final_ticker} ({found_name})")
+        return final_ticker
+
+    except requests.exceptions.RequestException as req_err:
+        raise APILimitError(f"Impossible de contacter le service de recherche de ticker. Erreur: {req_err}")
+    except ValueError as json_err:
+        raise APILimitError(f"Réponse invalide reçue du service de recherche. Erreur: {json_err}")
+
+
+---
+File: /agent/agent.py
+---
+
+# agent.py
+from dotenv import load_dotenv
+load_dotenv()
+
+# Variables d'environnement
+import os
+
+# Variables et données
+import json
+from typing import TypedDict, List, Annotated, Any
+import pandas as pd
+from io import StringIO
+import textwrap
+
+# Graphiques
+import plotly.express as px
+import plotly.io as pio
+import plotly.graph_objects as go
+import graphviz
+
+# Numéro de session unique
+import uuid
+
+# Import de scripts
+from src.fetch_data import APILimitError 
+from src.chart_theme import stella_theme 
+
+# LangGraph et LangChain
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import AnyMessage, add_messages
+from langgraph.checkpoint.memory import MemorySaver
+from langsmith import Client
+
+
+# --- Import des tools ---
+from tools import (
+    available_tools,
+    _fetch_recent_news_logic,
+    _search_ticker_logic,
+    _fetch_data_logic, 
+    _preprocess_data_logic, 
+    _analyze_risks_logic, 
+    _create_dynamic_chart_logic,
+    _fetch_profile_logic,
+    _fetch_price_history_logic,
+    _compare_fundamental_metrics_logic,
+    _compare_price_histories_logic
+    # _query_research_document_logic imported lazily in execute_tool_node
+)
+
+# Environment variables and constants
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = "moonshotai/kimi-k2:free"
+LANGSMITH_TRACING = True
+LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+LANGSMITH_PROJECT = "stella"
+
+if not OPENROUTER_API_KEY:
+    raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
+
+# Initialize the LLM
+llm = ChatOpenAI(
+    model=OPENROUTER_MODEL,
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1",
+    temperature=0,
+    default_headers={
+        "HTTP-Referer": "https://github.com/DataScientest-Studio/nov24_cds_opa",
+        "X-Title": "Stella Financial Assistant"
+    }
+)
+
+# Objet AgentState pour stocker et modifier l'état de l'agent entre les nœuds
+class AgentState(TypedDict):
+    input: str
+    ticker: str
+    tickers: List[str]
+    company_name: str
+    fetched_df_json: str
+    processed_df_json: str
+    analysis: str
+    plotly_json: str  
+    messages: Annotated[List[AnyMessage], add_messages]
+    error: str
+
+# --- Prompt système (définition du rôle de l'agent) ---
+system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions. Tu as été créée par une équipe de recherche dans le cadre du **Projet OPA**.
+
+Lien du repo Github du projet :
+https://github.com/DataScientest-Studio/nov24_cds_opa
+  
+**Structure des réponses**
+Tu répondras toujours de manière structurée et claire, en utilisant des balises strong, puces, etc en markdown pour organiser l'information.
+
+**Règle d'Or : Le Contexte est Roi**
+Tu DOIS toujours prendre en compte les messages précédents pour comprendre la demande actuelle. 
+Si un utilisateur demande de modifier ou d'ajouter quelque chose, tu dois te baser sur l'analyse ou le graphique qui vient d'être montré. 
+Ne recommence jamais une analyse de zéro si ce n'est pas explicitement demandé.
+
+**Gestion des Demandes Hors Sujet (Très Important !)**
+Ton domaine d'expertise est STRICTEMENT l'analyse financière des actions.
+Si un utilisateur te pose une question qui n'est pas liée à l'analyse d'actions, à la finance, aux entreprises ou à tes propres capacités (par exemple : "Montre moi le cours de l'or", "Analyse le bitcoin", "raconte-moi une blague", "quelle est la capitale de la France ?", "donne-moi une recette de cuisine"), tu ne DOIS PAS utiliser d'outils.
+Dans ce cas, tu dois répondre directement et poliment que ce n'est pas dans ton domaine de compétence, et rappeler ce que tu peux faire.
+
+**Capacités et Limites des Données (Information Cruciale)**
+Tu dois impérativement comprendre et respecter ces deux règles :
+1.  **Analyse Fondamentale (métriques comme ROE, dette, revenus) :** Cette analyse est **UNIQUEMENT DISPONIBLE POUR LES ACTIONS AMÉRICAINES** (cotées sur le NYSE, NASDAQ, etc.). Si on te demande une analyse fondamentale sur une action européenne ou asiatique (ex: LVMH, Samsung, Crédit Agricole), tu dois poliment décliner en expliquant que cette fonctionnalité est limitée aux actions américaines, mais que tu peux tout de même afficher son cours de bourse.
+2.  **Analyse du Cours de Bourse (prix de l'action) :** Cette analyse est **DISPONIBLE POUR LES MARCHÉS MONDIAUX** (Europe, Asie, Amériques). Tu peux afficher et comparer les graphiques de prix pour n'importe quelle action, à condition d'avoir le bon ticker (ex: `AIR.PA` pour Airbus, `005930.KS` pour Samsung).
+
+**Liste des outils disponibles**
+1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom. A utiliser uniquement si tu n'es pas totalement sûre du ticker à choisir.
+2.  `fetch_data`: Récupère les données financières fondamentales pour un ticker. **RAPPEL : Ne fonctionne que pour les actions américaines.**
+3.  `preprocess_data`: Prépare et nettoie les données financières. **RAPPEL : Ne fonctionne que sur les données américaines.**
+4.  `analyze_risks`: Prédit la performance d'une action. **RAPPEL : Ne fonctionne que sur les données américaines.**
+5.  `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. **Fonctionne pour les actions du monde entier.**
+6.  `display_raw_data`: Affiche les données financières brutes. **RAPPEL : Données américaines uniquement.**
+7.  `display_processed_data`: Affiche les données financières traitées. **RAPPEL : Données américaines uniquement.**
+8.  `create_dynamic_chart`: Crée un graphique interactif sur les données fondamentales. **RAPPEL : Données américaines uniquement.**
+9.  `get_stock_news`: Récupère les dernières actualités. **Fonctionne mieux pour les entreprises internationales.**
+10. `get_company_profile`: Récupère le profil d'une entreprise. **Fonctionne pour les entreprises internationales.**
+11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. **Lis attentivement les instructions ci-dessous pour cet outil.**
+12. `query_research`: Recherche dans le rapport de projet via un système RAG pour trouver, expliquer ou résumer des informations liées au contexte et à la recherche du projet.
+
+Si l'utilisateur te demande à quoi tu sers, ce que tu sais faire, ou toute autre demande similaire, tu n'utiliseras **AUCUN OUTIL**.
+Tu dois répondre **EXACTEMENT** et **UNIQUEMENT** avec le texte suivant, sans rien ajouter ni modifier :
+
+Je suis Stella 👩🏻, une assistante experte financière créée par une équipe de recherche dans le cadre du Projet OPA. Mon rôle principal est de t'aider à analyser des actions.
+
+### Ce que je peux faire pour toi :
+*   🔬 **Analyser une action en profondeur :** Je peux réaliser une analyse complète d'une action américaine, de la collecte des données jusqu'à une prédiction de risque.
+*   📊 **Créer des graphiques :** Je peux générer des graphiques dynamiques pour visualiser le prix d'une action ou d'autres métriques financières.
+*   ⚖️ **Comparer des actions :** Je peux mettre en perspective plusieurs entreprises sur la base de leurs prix ou de leurs données fondamentales.
+*   ℹ️ **Donner des informations clés :** Je peux te fournir des détails sur une entreprise (secteur, CEO, description, etc.).
+*   🧠 **Répondre à tes questions sur le projet :** Grâce à ma fonction de RAG (Recherche Augmentée), je peux chercher des informations dans la documentation du projet qui m'a créée.
+
+### Mes limites à connaître
+*   🇺🇸 Mon analyse fondamentale est limitée aux **actions américaines**.
+*   📈 Les données de cours sont disponibles sur une période d' **un an maximum**.
+*   ⚠️ Je ne fournis **aucun conseil d'investissement**. Mon but est de présenter des données et des analyses objectives.
+
+### Exemples de questions que tu peux me poser :
+*   `Analyse l'action GOOGL`
+*   `Montre-moi l'évolution du ROE de Microsoft`
+*   `Compare le cours de l'action de Apple et Nvidia sur 1 an`
+*   `Parle-moi de l'entreprise Tesla`
+*   `Quelle est la stack technique du projet Stella ?` (Ceci utilisera le RAG)
+
+**Alors, prêt à commencer ? Lance-toi !** 😊
+---
+
+**Séquence d'analyse complète (Actions Américaines Uniquement)**
+Quand un utilisateur te demande une analyse complète, tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS :
+1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker, et que tu n'es pas sûre du ticker.
+2.  `fetch_data` avec le ticker demandé.
+3.  `preprocess_data` pour nettoyer les données.
+4.  `analyze_risks` pour obtenir un verdict.
+
+**IMPORTANT : Pour une analyse complète, tu dois faire PLUSIEURS appels d'outils dans la même réponse.** Par exemple, si l'utilisateur demande "Analyse AAPL", tu dois appeler fetch_data, preprocess_data ET analyze_risks dans la même réponse, sans attendre de retour entre chaque outil.
+
+Ta tâche est considérée comme terminée après l'appel à `analyze_risks`. La réponse finale avec le graphique sera générée automatiquement.
+Exemples de demandes devant déclencher une analyse complète : 
+* "Analyse Tesla"
+* "Tu peux m'analyser Apple"
+* "Quels risques d'investissement pour McDonald's ?"
+
+**IDENTIFICATION DU TICKER** 
+Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), et que tu es SÛR de connaître le ticker, tu peux l'utiliser directement.
+Sinon, ton action doit être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
+
+**Analyse et Visualisation Dynamique (Actions Américaines Uniquement) :**
+Quand un utilisateur te demande de "montrer", "visualiser" des métriques spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS appeler TOUS les outils nécessaires EN UNE SEULE FOIS :
+1.  Appelle `fetch_data`.
+2.  Appelle `preprocess_data`.
+3.  Appelle `create_dynamic_chart`.
+
+**IMPORTANT : Tu dois faire ces TROIS appels d'outils dans la même réponse**, sans attendre de retour entre chaque outil.
+
+**Analyse Comparative :**
+Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le ROE de Google et Apple" ou "performance de l'action de MSFT vs GOOGL"), tu DOIS :
+1.  **Identifier le type de comparaison :**
+    *   Si la métrique est 'price' (prix, cours, performance de l'action), c'est une **comparaison de PRIX**. Elle fonctionne pour TOUTES les actions.
+    *   Si la métrique est fondamentale (ROE, dette, marketCap, etc.), c'est une **comparaison FONDAMENTALE**. Elle ne fonctionne que pour les actions AMÉRICAINES. Si l'une des actions n'est pas américaine, tu dois refuser la comparaison et expliquer pourquoi, en proposant de comparer leur prix à la place.
+2.  Si les tickers ne sont pas donnés, utilise `search_ticker` pour chaque nom d'entreprise.
+3.  Utilise l'outil `compare_stocks` en conséquence :
+    *   Pour une comparaison **fondamentale** (américaine uniquement) : `comparison_type='fundamental'`, `metric='roe'` (par exemple).
+    *   Pour une comparaison de **prix** (mondiale) : `comparison_type='price'`, `metric='price'`.
+
+**AFFICHAGE DE DONNEES** 
+Si l'utilisateur te demande d'afficher des données, tu dois appeler TOUS les outils nécessaires EN UNE SEULE FOIS :
+* Vérifier si l'entreprise est américaine ou internationale. Répondre en rappelant tes limites si l'entreprise n'est pas américaine. 
+* Si des données ne sont pas disponibles dans le contexte, tu dois appeler `fetch_data` ET ENSUITE `display_raw_data` ou `display_processed_data` dans la même réponse.
+* Si des données sont déjà disponibles, appelle directement l'outil d'affichage approprié.
+
+**IMPORTANT : Pour afficher des données traitées, tu dois faire fetch_data, preprocess_data ET display_processed_data dans la même réponse** si les données ne sont pas déjà disponibles.
+
+Tu dois bien comprendre que tu ne dois jamais afficher les données brutes ou traitées sans utiliser ces outils, car ils formatent correctement les données pour l'affichage.
+Exemples : 
+* "Affiche les données brutes de Tesla" -> `fetch_data` + `display_raw_data` (en une fois)
+* "Affiche les données traitées d'Apple" -> `fetch_data` + `preprocess_data` + `display_processed_data` (en une fois)
+* "Montre-moi les données" -> `display_raw_data` (si données déjà disponibles)
+* "Tableau des données" -> `display_raw_data` (si données déjà disponibles)
+
+**DEMANDES LIEES AU PROJET OPA**
+Tu as accès au document de recherche interne l'équipe qui t'a créée via l'outil `query_research`.
+Ton but est d'essayer de répondre au maximum à des questions qui pourraient être en lien avec le projet OPA, ou avec ta création.
+Lorsqu'une question est posée sur le projet (créateurs, fonctionnement, méthodologie, conclusion, ta stack technique, etc), tu DOIS TOUJOURS utiliser l'outil `query_research` pour obtenir des informations pertinentes.
+Le contexte seul ne suffit pas, car il n'est pas toujours à jour ou complet. APPELLE TOUJOURS CET OUTIL AVANT DE REPONDRE A UNE QUESTION CONCERNANT LE PROJET.
+Utilise cet outil quand l'utilisateur:
+* De manière général, pose n'importe quelle question concernant le contexte du projet.
+* Demande comment tu as été créée.
+* Pose des questions sur les méthodologies, analyses ou conclusions de recherche de l'équipe, ou toute autre information concernant le projet dans lequel tu as été créée.
+
+**Gestion des Questions de Suivi (Très Important !)**
+
+*   **Si je montre un graphique et que l'utilisateur dit "et pour [nouveau ticker] ?"**: Tu dois comprendre qu'il faut ajouter ce ticker au graphique existant. Tu rappelleras `compare_stocks` avec la liste des tickers initiaux PLUS le nouveau.
+    *Ex: L'agent montre un graphique de prix pour `['AAPL', 'GOOG']`. L'utilisateur dit "rajoute Meta". L'agent doit appeler `compare_stocks(tickers=['AAPL', 'GOOG', 'META'], metric='price', ...)`.*
+
+*   **Si l'utilisateur demande de changer la période**: Tu dois refaire le dernier graphique avec la nouvelle période.
+    *Ex: L'agent montre un graphique sur 1 an. L'utilisateur dit "montre sur 5 ans". L'agent doit rappeler le même outil avec `period_days=1260`.*
+
+*   **Pour le NASDAQ 100**: Utilise le ticker de l'ETF `QQQ`. Pour le S&P 500, utilise `SPY`. Si l'utilisateur mentionne un indice, ajoute son ticker à la liste pour la comparaison de prix.
+
+Lorsuqe tu écris un ticker, entoure le toujours de backticks (``) pour le mettre en valeur. (ex: `AAPL`).
+Tu dois toujours répondre en français et tutoyer ton interlocuteur.
+Fais TOUJOURS référence à **Stella comme toi même**.
+Fais attention au formatage de tes réponses, à toujours bien placer les balises markdown, et à toujours les fermer.
+"""
+
+# --- Définition des noeuds du Graph ---
+
+# Noeud 1 : agent_node, point d'entrée et appel du LLM 
+def agent_node(state: AgentState):
+    """Le 'cerveau' de l'agent. Décide du prochain outil à appeler."""
+    print("\n--- AGENT: Décision de la prochaine étape... ---")
+
+    # On commence par le prompt système pour donner le rôle
+    current_messages = [SystemMessage(content=system_prompt)]
+    
+    # --- INJECTION DE CONTEXTE DYNAMIQUE ---
+    data_to_inspect_json = state.get("processed_df_json") or state.get("fetched_df_json")
+    
+    if data_to_inspect_json:
+        try:
+            df = pd.read_json(StringIO(data_to_inspect_json), orient='split')
+            available_columns = df.columns.tolist()
+            
+            # On crée un message système temporaire avec les colonnes disponibles
+            context_message = SystemMessage(
+                content=(
+                    f"\n\n--- CONTEXTE ACTUEL DES DONNÉES ---\n"
+                    f"Des données sont disponibles.\n"
+                    f"Si tu utilises `create_dynamic_chart`, tu DOIS choisir les colonnes EXACTEMENT dans cette liste :\n"
+                    f"{available_columns}\n"
+                    f"---------------------------------\n"
+                )
+            )
+            # On ajoute le contexte à notre liste de messages
+            current_messages.append(context_message)
+
+        except Exception as e:
+            print(f"Avertissement: Impossible d'injecter le contexte des colonnes. Erreur: {e}")
+
+    # On ajoute l'historique de la conversation depuis l'état
+    current_messages.extend(state['messages'])
+
+    # 🕐 TIMING: Start measuring LLM inference time
+    import time
+    llm_start_time = time.time()
+    print(f"⏱️  [LLM] Starting inference call to {OPENROUTER_MODEL}...")
+    
+    # On invoque le LLM avec la liste de messages complète
+    # Cette liste est locale et ne modifie pas l'état directement
+    response = llm.bind_tools(available_tools).invoke(current_messages)
+    
+    # 🕐 TIMING: End measuring LLM inference time
+    llm_end_time = time.time()
+    llm_duration = llm_end_time - llm_start_time
+    print(f"⏱️  [LLM] Inference completed in {llm_duration:.2f} seconds")
+    
+    print(f"response.content: {response.content}")
+    return {"messages": [response]}
+
+# Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
+def execute_tool_node(state: AgentState):
+    """Le "pont" qui exécute la logique réelle et met à jour l'état."""
+    print("\n--- OUTILS: Exécution d'un outil ---")
+    action_message = next((msg for msg in reversed(state['messages']) if isinstance(msg, AIMessage) and msg.tool_calls), None)
+    if not action_message:
+        raise ValueError("Aucun appel d'outil trouvé dans le dernier AIMessage.")
+
+    tool_outputs = []
+    current_state_updates = {}
+    
+    # Create a working copy of state that gets updated as we execute tools
+    working_state = state.copy()
+    
+    # On gère le cas où plusieurs outils sont appelés, bien que ce soit rare ici.
+    for tool_call in action_message.tool_calls:
+        tool_name = tool_call['name']
+        tool_args = tool_call['args']
+        tool_id = tool_call['id']
+        print(f"Le LLM a décidé d'appeler le tool : {tool_name} - avec les arguments : {tool_args}")
+        
+        # 🕐 TIMING: Start measuring tool execution time
+        import time
+        tool_start_time = time.time()
+        print(f"⏱️  [TOOL] Starting execution of '{tool_name}'...")
+
+        try:
+            if tool_name == "search_ticker":
+                company_name = tool_args.get("company_name")
+                ticker = _search_ticker_logic(company_name=company_name)
+                # On stocke le ticker ET le nom de l'entreprise
+                current_state_updates["ticker"] = ticker
+                current_state_updates["company_name"] = company_name 
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker `{ticker}` trouvé.]"))
+
+            elif tool_name == "fetch_data":
+                try:
+                    output_df = _fetch_data_logic(ticker=tool_args.get("ticker"))
+                    current_state_updates["fetched_df_json"] = output_df.to_json(orient='split')
+                    current_state_updates["ticker"] = tool_args.get("ticker")
+                    # Update working state immediately for next tool
+                    working_state["fetched_df_json"] = current_state_updates["fetched_df_json"]
+                    working_state["ticker"] = current_state_updates["ticker"]
+                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données récupérées avec succès.]"))
+                except APILimitError as e:
+                    user_friendly_error = "Désolé, il semble que j'aie un problème d'accès à mon fournisseur de données. Peux-tu réessayer plus tard ?"
+                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": user_friendly_error})))
+                    current_state_updates["error"] = user_friendly_error
+            
+            elif tool_name == "get_stock_news":
+                
+                # 1. On cherche le ticker dans les arguments fournis par le LLM, SINON dans l'état.
+                ticker = tool_args.get("ticker") or state.get("ticker")
+                
+                # 2. Si après tout ça, on n'a toujours pas de ticker, c'est une vraie erreur.
+                if not ticker:
+                    raise ValueError("Impossible de déterminer un ticker pour chercher les nouvelles, ni dans la commande, ni dans le contexte.")
+                
+                # 3. On fait pareil pour le nom de l'entreprise (qui est optionnel mais utile)
+                # On utilise le ticker comme nom si on n'a rien d'autre.
+                company_name = tool_args.get("company_name") or state.get("company_name") or ticker
+                
+                # 4. On appelle la logique avec les bonnes informations.
+                news_summary = _fetch_recent_news_logic(
+                    ticker=ticker, 
+                    company_name=company_name
+                )
+
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=news_summary))
+                
+            elif tool_name == "preprocess_data":
+                # Check working state first, then fall back to original state
+                fetched_df_json = current_state_updates.get("fetched_df_json") or working_state.get("fetched_df_json")
+                if not fetched_df_json:
+                    raise ValueError("Impossible de prétraiter les données car elles n'ont pas encore été récupérées.")
+                fetched_df = pd.read_json(StringIO(fetched_df_json), orient='split')
+                output = _preprocess_data_logic(df=fetched_df)
+                current_state_updates["processed_df_json"] = output.to_json(orient='split')
+                # Update working state immediately for next tool
+                working_state["processed_df_json"] = current_state_updates["processed_df_json"]
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données prétraitées avec succès.]"))
+
+            elif tool_name == "analyze_risks":
+                # Check working state first, then fall back to original state  
+                processed_df_json = current_state_updates.get("processed_df_json") or working_state.get("processed_df_json")
+                if not processed_df_json:
+                    raise ValueError("Impossible de faire une prédiction car les données n'ont pas encore été prétraitées.")
+                processed_df = pd.read_json(StringIO(processed_df_json), orient='split')
+                output = _analyze_risks_logic(processed_data=processed_df)
+                current_state_updates["analysis"] = output
+                # Update working state immediately for potential next tool
+                working_state["analysis"] = current_state_updates["analysis"]
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=output))
+            
+            elif tool_name == "create_dynamic_chart":
+                # Check working state first for data access in tool chains
+                data_json_for_chart = (
+                    current_state_updates.get("processed_df_json") or 
+                    working_state.get("processed_df_json") or 
+                    current_state_updates.get("fetched_df_json") or 
+                    working_state.get("fetched_df_json")
+                )
+                if not data_json_for_chart:
+                    raise ValueError("Aucune donnée disponible pour créer un graphique.")
+                
+                # On convertit le JSON en DataFrame
+                df_for_chart = pd.read_json(StringIO(data_json_for_chart), orient='split')
+                
+                chart_json = _create_dynamic_chart_logic(
+                    data=df_for_chart,  # <--- Le DataFrame est passé directement
+                    chart_type=tool_args.get('chart_type'),
+                    x_column=tool_args.get('x_column'),
+                    y_column=tool_args.get('y_column'),
+                    title=tool_args.get('title'),
+                    color_column=tool_args.get('color_column')
+                )
+                
+                
+                if "Erreur" in chart_json:
+                    raise ValueError(chart_json) # Transforme l'erreur de l'outil en exception
+                
+                current_state_updates["plotly_json"] = chart_json
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé.]"))
+
+            elif tool_name in ["display_raw_data", "display_processed_data"]:
+                if not state.get("fetched_df_json"):
+                     raise ValueError("Aucune donnée disponible à afficher.")
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
+
+            elif tool_name == "get_company_profile":
+                ticker = tool_args.get("ticker")
+                profile_json = _fetch_profile_logic(ticker=ticker)
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=profile_json))
+            
+            elif tool_name == "display_price_chart":
+                ticker = tool_args.get("ticker")
+                period = tool_args.get("period_days", 252) # Utilise la valeur par défaut si non fournie
+                
+                # On appelle notre logique pour récupérer les données de prix
+                price_df = _fetch_price_history_logic(ticker=ticker, period_days=period)
+                
+                # On crée le graphique directement ici
+                fig = px.line(
+                    price_df, 
+                    x=price_df.index, 
+                    y='close', 
+                    title=f"Historique du cours de {ticker.upper()} sur {period} jours",
+                    color_discrete_sequence=stella_theme['colors']
+
+                )
+                fig.update_layout(template=stella_theme['template'], font=stella_theme['font'], xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
+                
+                # On convertit en JSON et on met à jour l'état
+                chart_json = pio.to_json(fig)
+                current_state_updates["plotly_json"] = chart_json
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de prix créé avec succès.]"))
+
+            elif tool_name == "compare_stocks":
+                tickers = tool_args.get("tickers")
+                metric = tool_args.get("metric")
+                comparison_type = tool_args.get("comparison_type", "fundamental")
+
+                if comparison_type == 'fundamental':
+                    # On appelle la fonction qui retourne l'historique
+                    comp_df = _compare_fundamental_metrics_logic(tickers=tickers, metric=metric)
+                    fig = px.line(
+                        comp_df,
+                        x=comp_df.index,
+                        y=comp_df.columns,
+                        title=f"Évolution de la métrique '{metric.upper()}'",
+                        labels={'value': metric.upper(), 'variable': 'Ticker', 'calendarYear': 'Année'},
+                        markers=True, # Les marqueurs sont utiles pour voir les points de données annuels
+                        color_discrete_sequence=stella_theme['colors']  # Utilise la palette de couleurs Stella
+                    )
+                elif comparison_type == 'price':
+                    # La logique pour le prix ne change pas, elle est déjà une évolution
+                    period = tool_args.get("period_days", 252)
+                    comp_df = _compare_price_histories_logic(tickers=tickers, period_days=period)
+                    fig = px.line(
+                        comp_df,
+                        title=f"Comparaison de la performance des actions (Base 100)",
+                        labels={'value': 'Performance Normalisée (Base 100)', 'variable': 'Ticker', 'index': 'Date'},
+                        color_discrete_sequence=stella_theme['colors']
+                    )
+                else:
+                    raise ValueError(f"Type de comparaison inconnu: {comparison_type}")
+
+                # Le reste du code est commun et ne change pas
+                fig.update_layout(template="plotly_white")
+                chart_json = pio.to_json(fig)
+                current_state_updates["plotly_json"] = chart_json
+                current_state_updates["tickers"] = tickers
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de comparaison créé.]"))
+            
+            elif tool_name == "query_research":
+                query = tool_args.get("query")
+                # Lazy import to avoid initialization delays
+                from src.pdf_research import query_research_document as _query_research_document_logic
+                research_result = _query_research_document_logic(query=query)
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=research_result))
+            
+        except Exception as e:
+            # Bloc de capture générique pour toutes les autres erreurs
+            error_msg = f"Erreur lors de l'exécution de l'outil '{tool_name}': {repr(e)}"
+            tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[ERREUR: {error_msg}]"))
+            current_state_updates["error"] = error_msg
+            print(error_msg)
+        
+        # 🕐 TIMING: End measuring tool execution time
+        tool_end_time = time.time()
+        tool_duration = tool_end_time - tool_start_time
+        print(f"⏱️  [TOOL] '{tool_name}' completed in {tool_duration:.2f} seconds")
+            
+    current_state_updates["messages"] = tool_outputs
+    return current_state_updates
+
+# Noeud 3 : generate_final_response_node, synthétise la réponse finale à partir de l'état.
+def generate_final_response_node(state: AgentState):
+    """
+    Génère la réponse textuelle finale ET le graphique Plotly par défaut après une analyse complète.
+    Ce noeud est le point de sortie pour une analyse de prédiction.
+    """
+    print("\n--- AGENT: Génération de la réponse finale et du graphique ---")
+    
+    # --- 1. Récupération des informations de l'état ---
+    ticker = state.get("ticker", "l'action")
+    analysis_result = state.get("analysis", "inconnu")
+    processed_df_json = state.get("processed_df_json")
+
+    # --- 2. Construction de la réponse textuelle ---
+    response_content = ""
+    latest_year_str = "récentes"
+    next_year_str = "prochaine"
+    
+    if processed_df_json:
+        try:
+            df = pd.read_json(StringIO(processed_df_json), orient='split')
+            if not df.empty and 'calendarYear' in df.columns:
+                latest_year_str = df['calendarYear'].iloc[-1]
+                next_year_str = str(int(latest_year_str) + 1)
+        except Exception as e:
+            print(f"Avertissement : Impossible d'extraire l'année des données : {e}")
+
+    # Logique de la réponse textuelle basée sur la prédiction
+    if analysis_result == "Risque Élevé Détecté":
+        response_content = (
+            f"⚠️ **Attention !** Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir (`{next_year_str}`)**.\n\n"
+            "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
+        )
+    elif analysis_result == "Aucun Risque Extrême Détecté":
+        response_content = (
+            f"Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir (`{next_year_str}`)**.\n\n"
+            "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
+        )
+    else:
+        response_content = f"L'analyse des données pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction n'a pas pu être interprété."
+
+    # --- 3. Création du graphique de synthèse ---
+    chart_json = None
+    explanation_text = None 
+    if processed_df_json:
+        try:
+            df = pd.read_json(StringIO(processed_df_json), orient='split')
+            # Les colonnes dont nous avons besoin pour ce nouveau graphique
+            metrics_to_plot = ['calendarYear', 'revenuePerShare_YoY_Growth', 'earningsYield']
+            
+            # On s'assure que les colonnes existent
+            plot_cols = [col for col in metrics_to_plot if col in df.columns]
+            
+            if not df.empty and all(col in plot_cols for col in metrics_to_plot):
+                chart_title = f"Analyse Croissance vs. Valorisation pour {ticker.upper()}"
+                
+                # Créer la figure de base
+                fig = go.Figure()
+
+                # 1. Ajouter les barres de Croissance du CA (% YoY) sur l'axe Y1
+                fig.add_trace(go.Scatter(
+                    x=df['calendarYear'],
+                    y=df['revenuePerShare_YoY_Growth'],
+                    name='Croissance du CA (%)',
+                    mode='lines+markers', # On spécifie le mode ligne avec marqueurs
+                    line=dict(color=stella_theme['colors'][1]), # On utilise 'line' pour la couleur
+                    yaxis='y1'
+                ))
+
+                # 2. Ajouter la ligne de Valorisation (Earnings Yield) sur l'axe Y2
+                fig.add_trace(go.Scatter(
+                    x=df['calendarYear'],
+                    y=df['earningsYield'],
+                    name='Rendement des Bénéfices (Valorisation)',
+                    mode='lines+markers',
+                    line=dict(color=stella_theme['colors'][0]), # Bleu Stella
+                    yaxis='y2'
+                ))
+                
+                # Ajouter une ligne à zéro pour mieux visualiser la croissance positive/négative
+                fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="black", yref="y1")
+
+                # 3. Configurer les axes et le layout
+                fig.update_layout(
+                    title_text=chart_title,
+                    template=stella_theme['template'],
+                    font=stella_theme['font'],
+                    margin=dict(r=320),
+                    xaxis=dict(
+                        title='Année',
+                        type='category' # Force l'axe à traiter les années comme des étiquettes uniques
+                    ),
+                    yaxis=dict(
+                        title=dict(
+                            text='Croissance Annuelle du CA',
+                            font=dict(color=stella_theme['colors'][1])
+                        ),
+                        tickfont=dict(color=stella_theme['colors'][1]),
+                        ticksuffix=' %'
+                    ),
+                    yaxis2=dict(
+                        title=dict(
+                            text='Rendement bénéficiaire (inverse du P/E)',
+                            font=dict(color=stella_theme['colors'][0]) 
+                        ),
+                        tickfont=dict(color=stella_theme['colors'][0]),
+                        anchor='x',
+                        overlaying='y',
+                        side='right',
+                        tickformat='.2%'
+                    ),
+                    legend=dict(
+                        orientation="v",
+                        yanchor="top",
+                        y=1, # On aligne le haut de la légende avec le haut du graphique
+                        xanchor="left",
+                        x=1.20, # On pousse la légende un peu plus à droite
+                        bordercolor="rgba(0, 0, 0, 0.2)", # Bordure légère
+                        borderwidth=1,
+                        title_text="Légende"
+                    )
+                )
+                
+                chart_json = pio.to_json(fig)
+                response_content += f"\n\n**Voici une visualisation de sa croissance par rapport à sa valorisation :**"
+                
+                # On crée le texte explicatif et on l'ajoute à la suite
+                explanation_text = textwrap.dedent("""
+                    ---
+                    **Comment interpréter ce graphique ?**
+
+                    Ce graphique croise deux questions clés : "L'entreprise grandit-elle ?" et "Quel prix le marché paie-t-il pour cette croissance ?".
+
+                    *   🟣 **La ligne violette (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
+                    *   🟢 **La ligne verte (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
+
+                    **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne 🟣 qui monte) avec une valorisation qui reste raisonnable (ligne 🟢 stable ou qui monte). Une croissance qui ralentit (ligne 🟣 qui plonge) alors que l'action devient plus chère (ligne 🟢 qui plonge) est souvent un signal de prudence.
+                """)
+            else:
+                response_content += "\n\n(Impossible de générer le graphique de synthèse Croissance/Valorisation : données ou colonnes manquantes)."
+
+        except Exception as e:
+            print(f"Erreur lors de la création du graphique par défaut : {e}")
+            response_content += "\n\n(Je n'ai pas pu générer le graphique associé en raison d'une erreur.)"
+    
+    # --- 4. Création du message final ---
+    final_message = AIMessage(content=response_content)
+    if chart_json:
+        # On attache le graphique ET le texte explicatif au message
+        setattr(final_message, 'plotly_json', chart_json)
+        if explanation_text:
+            setattr(final_message, 'explanation_text', explanation_text)
+
+    return {"messages": [final_message]}
+
+# Noeud 4 : cleanup_state_node, nettoie l'état pour éviter de stocker des données lourdes.
+def cleanup_state_node(state: AgentState):
+    """
+    Nettoie l'état pour la prochaine interaction.
+    Il efface les données spécifiques à la dernière réponse (prédiction, graphique)
+    mais GARDE le contexte principal (données brutes et traitées, ticker)
+    pour permettre des questions de suivi.
+    """
+    print("\n--- SYSTEM: Nettoyage partiel de l'état avant la sauvegarde ---")
+    
+    # On garde : 'ticker', 'tickers', 'company_name', 'fetched_df_json', 'processed_df_json'
+    # On supprime (réinitialise) :
+    return {
+        "analysis": "",   # Efface la prédiction précédente
+        "plotly_json": "",  # Efface le graphique précédent
+        "error": ""         # Efface toute erreur précédente
+    }
+
+# Noeuds supplémentaires de préparation pour l'affichage des données, graphiques, actualités et profil d'entreprise.
+def prepare_data_display_node(state: AgentState):
+    """Prépare un AIMessage avec un DataFrame spécifique attaché."""
+    print("\n--- AGENT: Préparation du DataFrame pour l'affichage ---")
+    
+    tool_name_called = next(msg for msg in reversed(state['messages']) if isinstance(msg, AIMessage) and msg.tool_calls).tool_calls[-1]['name']
+
+    if tool_name_called == "display_processed_data" and state.get("processed_df_json"):
+        df_json = state["processed_df_json"]
+        message_content = "Voici les données **pré-traitées** que tu as demandées :"
+    elif tool_name_called == "display_raw_data" and state.get("fetched_df_json"):
+        df_json = state["fetched_df_json"]
+        message_content = "Voici les données **brutes** que tu as demandées :"
+    else:
+        final_message = AIMessage(content="Désolé, les données demandées ne sont pas disponibles.")
+        return {"messages": [final_message]}
+
+    final_message = AIMessage(content=message_content)
+    setattr(final_message, 'dataframe_json', df_json)
+    return {"messages": [final_message]}
+
+def prepare_chart_display_node(state: AgentState):
+    """Prépare un AIMessage avec le graphique Plotly demandé par l'utilisateur."""
+    print("\n--- AGENT: Préparation du graphique pour l'affichage ---")
+    
+    # Laisse le LLM générer une courte phrase d'introduction
+    response = ("Voici le graphique demandé : ")
+    
+    final_message = AIMessage(content=response)
+    setattr(final_message, 'plotly_json', state["plotly_json"])
+    
+    return {"messages": [final_message]}
+
+def prepare_news_display_node(state: AgentState):
+    """Prépare un AIMessage avec les actualités formatées pour l'affichage."""
+    print("\n--- AGENT: Préparation de l'affichage des actualités ---")
+    
+    # 1. Retrouver le ToolMessage qui contient le résultat des actualités
+    # On cherche le dernier message de type ToolMessage dans l'historique
+    tool_message = next((msg for msg in reversed(state['messages']) if isinstance(msg, ToolMessage)), None)
+    
+    if not tool_message or not tool_message.content:
+        final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer les actualités.")
+        return {"messages": [final_message]}
+
+    # 2. Préparer le contenu textuel de la réponse
+    ticker = state.get("ticker", "l'entreprise")
+    company_name = state.get("company_name", ticker)
+    
+    response_content = f"Voici les dernières actualités que j'ai trouvées pour **{company_name.title()} ({ticker.upper()})** :"
+    
+    final_message = AIMessage(content=response_content)
+    
+    # 3. Attacher le JSON des actualités au message final
+    # Le front-end (Streamlit) utilisera cet attribut pour afficher les articles
+    setattr(final_message, 'news_json', tool_message.content)
+    
+    return {"messages": [final_message]}
+
+def prepare_profile_display_node(state: AgentState):
+    """Prépare un AIMessage avec le profil de l'entreprise pour l'affichage."""
+    print("\n--- AGENT: Préparation de l'affichage du profil d'entreprise ---")
+    
+    tool_message = next((msg for msg in reversed(state['messages']) if isinstance(msg, ToolMessage)), None)
+    
+    if not tool_message or not tool_message.content:
+        final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer le profil de l'entreprise.")
+        return {"messages": [final_message]}
+
+    prompt = f"""
+    Voici les informations de profil pour une entreprise au format JSON :
+    {tool_message.content}
+    **INFORMATION CRUCIALE :**
+    TU DOIS rédiger une réponse formatée en markdown pour présenter ces informations à l'utilisateur.
+    Rédige une réponse la plus exhaustive et agréable possible pour présenter ces informations à l'utilisateur.
+    Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information qui n'est pas null dans le JSON.
+    Tu n'afficheras pas l'image du logo, l'UI s'en chargera, et tu n'as pas besoin de la mentionner.
+    Présente les informations de manière sobre en listant les points du JSON.
+    Si il y a un champ null, TU DOIS TOUJOURS le compléter via tes connaissances, sans inventer de données.
+    Si tu ne trouves pas d'informations, indique simplement "Inconnu" ou "Non disponible".
+    Termine en donnant le lien vers leur site web.
+    """
+    response = llm.invoke(prompt)
+    print(f"response.content: {response.content}")
+    final_message = AIMessage(content=response.content)
+    
+    # On attache le JSON pour que le front-end puisse afficher l'image du logo !
+    setattr(final_message, 'profile_json', tool_message.content)
+    
+    return {"messages": [final_message]}
+
+# Noeud de gestion des erreurs
+def handle_error_node(state: AgentState):
+    """
+    Génère un message d'erreur clair pour l'utilisateur, puis prépare le nettoyage de l'état.
+    Ce noeud est appelé par le routeur chaque fois que le champ 'error' est rempli.
+    """
+    print("\n--- AGENT: Gestion de l'erreur... ---")
+    error_message = state.get("error", "Une erreur inconnue est survenue.")
+    
+    # On crée une réponse claire et formatée pour l'utilisateur.
+    user_facing_error = textwrap.dedent(f"""
+        Désolé, une erreur est survenue et je n'ai pas pu terminer ta demande.
+        
+        **Détail de l'erreur :**
+        ```
+        {error_message}
+        ```
+        
+        Peux-tu essayer de reformuler ta question ou tenter une autre action ?
+    """)
+    
+    # On met cette réponse dans un AIMessage qui sera affiché dans le chat.
+    # L'étape suivante sera le nettoyage de l'état.
+    return {"messages": [AIMessage(content=user_facing_error)]}
+
+# --- Router pour diriger le flux du graph ---
+def router(state: AgentState) -> str:
+    """Le routeur principal du graphe, version finale robuste avec support du tool chaining."""
+    print("\n--- ROUTEUR: Évaluation de l'état pour choisir la prochaine étape ---")
+
+    # On récupère les messages de l'état
+    messages = state['messages']
+    
+    # Y a-t-il une erreur ? C'est la priorité absolue.
+    if state.get("error"):
+        print("Routeur -> Décision: Erreur détectée, passage au gestionnaire d'erreurs.")
+        return "handle_error"
+
+    # Le dernier message est-il une décision de l'IA d'appeler un outil ?
+    last_message = messages[-1]
+
+    if isinstance(last_message, AIMessage) and not last_message.tool_calls:
+        print("Routeur -> Décision: L'IA a fourni une réponse textuelle. Fin du cycle.")
+        return END
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        # C'est la première fois qu'on voit cette décision, on doit exécuter l'outil.
+        print("Routeur -> Décision: Appel d'outil demandé, passage à execute_tool.")
+        return "execute_tool"
+
+    # Si le dernier message n'est PAS un appel à un outil, cela signifie probablement
+    # qu'un outil vient de s'exécuter. Nous devons décider où aller ensuite.
+    
+    # On retrouve le dernier appel à un outil fait par l'IA
+    ai_message_with_tool_call = next(
+        (msg for msg in reversed(messages) if isinstance(msg, AIMessage) and msg.tool_calls),
+        None
+    )
+    # S'il n'y en a pas, on ne peut rien faire de plus.
+    if not ai_message_with_tool_call:
+        print("Routeur -> Décision: Aucune action claire à prendre (pas d'appel d'outil trouvé), fin du processus.")
+        return END
+    
+    # Check if there are multiple tool calls to execute in sequence
+    remaining_tool_calls = ai_message_with_tool_call.tool_calls
+    executed_tool_calls = [msg for msg in reversed(messages) if isinstance(msg, ToolMessage)]
+    
+    print(f"--- ROUTEUR: Nombre total d'outils à exécuter: {len(remaining_tool_calls)}, déjà exécutés: {len(executed_tool_calls)}")
+    
+    # If we still have tools to execute from the same AI message, continue executing them
+    if len(executed_tool_calls) < len(remaining_tool_calls):
+        next_tool_name = remaining_tool_calls[len(executed_tool_calls)]['name']
+        print(f"Routeur -> Décision: Outil suivant dans la chaîne: '{next_tool_name}', continuer l'exécution.")
+        return "execute_tool"
+        
+    # All tools from the current AI message have been executed, check the last executed tool
+    tool_name = ai_message_with_tool_call.tool_calls[-1]['name']
+    print(f"--- ROUTEUR: Tous les outils de la chaîne ont été exécutés, le dernier était '{tool_name}'. ---")
+
+    # Maintenant, on décide de la suite en fonction du dernier outil de la chaîne.
+    if tool_name == 'analyze_risks':
+        return "generate_final_response"
+    elif tool_name == 'compare_stocks': 
+        return "prepare_chart_display"
+    elif tool_name == 'display_price_chart':
+        return "prepare_chart_display"
+    elif tool_name in ['display_raw_data', 'display_processed_data']:
+        return "prepare_data_display"
+    elif tool_name == 'create_dynamic_chart':
+        return "prepare_chart_display"
+    elif tool_name == 'get_stock_news':
+        return "prepare_news_display"
+    elif tool_name == 'get_company_profile': 
+        return "prepare_profile_display"
+    else: # Pour search_ticker, fetch_data, preprocess_data, etc
+        return "agent"
+    
+# --- CONSTRUCTION DU GRAPH ---
+def get_agent_app():
+    memory = MemorySaver()
+    workflow = StateGraph(AgentState)
+
+    workflow.add_node("agent", agent_node)
+    workflow.add_node("execute_tool", execute_tool_node)
+    workflow.add_node("generate_final_response", generate_final_response_node)
+    workflow.add_node("cleanup_state", cleanup_state_node)
+    workflow.add_node("prepare_data_display", prepare_data_display_node) 
+    workflow.add_node("prepare_chart_display", prepare_chart_display_node)
+    workflow.add_node("prepare_news_display", prepare_news_display_node)
+    workflow.add_node("prepare_profile_display", prepare_profile_display_node)
+    workflow.add_node("handle_error", handle_error_node)
+
+    workflow.set_entry_point("agent")
+
+    workflow.add_conditional_edges("agent", router, {"execute_tool": "execute_tool", "handle_error": "handle_error", "__end__": END})
+    workflow.add_conditional_edges(
+        "execute_tool",
+        router,
+        {
+            "agent": "agent", 
+            "generate_final_response": "generate_final_response",
+            "prepare_data_display": "prepare_data_display", 
+            "prepare_chart_display": "prepare_chart_display",
+            "prepare_news_display": "prepare_news_display", 
+            "prepare_profile_display": "prepare_profile_display",
+            "handle_error": "handle_error",
+            "__end__": END
+        }
+    )
+
+    workflow.add_edge("generate_final_response", "cleanup_state")
+    workflow.add_edge("prepare_profile_display", "cleanup_state")
+    workflow.add_edge("prepare_data_display", "cleanup_state")
+    workflow.add_edge("prepare_chart_display", "cleanup_state")
+    workflow.add_edge("prepare_news_display", "cleanup_state")
+    workflow.add_edge("handle_error", "cleanup_state")
+    workflow.add_edge("cleanup_state", END)
+
+    app = workflow.compile(checkpointer=memory)
+
+    try:
+        graph = app.get_graph()
+        image_bytes = graph.draw_mermaid_png()
+        with open("agent_workflow.png", "wb") as f:
+            f.write(image_bytes)
+        
+        print("\nVisualisation du graph sauvegardée dans le répertoire en tant que agent_workflow.png \n")
+
+    except Exception as e:
+        print(f"\nJe n'ai pas pu générer la visualisation. Lancez 'pip install playwright' et 'playwright install'. Erreur: {e}\n")
+    
+    return app
+
+app = get_agent_app()
+
+
+# --- Crée une animation du workflow ---
+def generate_trace_animation_frames(thread_id: str):
+    """
+    Récupère une trace LangSmith et génère une série d'images Graphviz au style moderne.
+    """
+    print(f"--- VISUALIZER: Génération de l'animation pour : {thread_id} ---")
+    try:
+        style_config = {
+            "graph": {
+                "fontname": "Arial",
+                "bgcolor": "transparent", # Fond transparent
+                "rankdir": "TB", # Top-to-Bottom layout
+            },
+            "nodes": {
+                "fontname": "Arial",
+                "shape": "box", # Forme rectangulaire
+                "style": "rounded,filled", # Bords arrondis et remplis
+                "fillcolor": "#1C202D", # Couleur de fond des noeuds (thème sombre)
+                "color": "#FAFAFA", # Couleur de la bordure
+                "fontcolor": "#FAFAFA", # Couleur du texte
+                "fontsize": "12", # Taille de police
+            },
+            "edges": {
+                "color": "#6c757d", # Couleur gris doux pour les flèches
+                "arrowsize": "0.8",
+            },
+            "highlight": {
+                "fillcolor": "#33FFBD", # Couleur orange pour le noeud actif (de chart_theme.py)
+                "color": "#33FFBD", # Bordure blanche pour le noeud actif
+                "fontcolor": "#000000", # Couleur noire pour le texte du noeud actif
+                "edge_color": "#33FFBD", # Couleur orange pour la flèche active
+            }
+        }
+
+        client = Client()
+        all_runs = list(client.list_runs(
+            project_name=os.environ.get("LANGCHAIN_PROJECT", "stella"),
+            thread_id=thread_id,
+        ))
+
+        if not all_runs:
+            print("--- VISUALIZER: Aucune exécution trouvée pour cet ID de thread.")
+            return []
+
+        thread_run = next((r for r in all_runs if not r.parent_run_id), None)
+        if not thread_run:
+            print("--- VISUALIZER: Exécution principale du thread introuvable.")
+            return []
+
+        trace_nodes_runs = sorted(
+            [r for r in all_runs if r.parent_run_id == thread_run.id],
+            key=lambda r: r.start_time
+        )
+        full_trace_path_names = [run.name for run in trace_nodes_runs]
+        full_trace_path = ["__start__"] + full_trace_path_names + ["__end__"]
+
+        if not trace_nodes_runs:
+            print("--- VISUALIZER: Aucun noeud enfant (étape) trouvé dans la trace.")
+            return []
+
+        print(f"--- VISUALIZER: Chemin d'exécution trouvé : {' -> '.join(full_trace_path)}")
+
+        graph_json = app.get_graph().to_json()
+        
+        frames = []
+        previous_node_in_trace = full_trace_path[0]
+        
+        node_labels_map = {}
+        for node in graph_json["nodes"]:
+            node_labels_map[node["id"]] = node["data"]["name"] if "data" in node and "name" in node["data"] else node["id"]
+
+
+        for i, current_node_name_in_trace in enumerate(full_trace_path):
+            # Attributs globaux pour le graphe
+            graph_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["graph"].items()])
+            node_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["nodes"].items()])
+            edge_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["edges"].items()])
+
+            dot_lines = [
+                "digraph {",
+                f"  graph [{graph_attrs}];",
+                f"  node [{node_attrs}];",
+                f"  edge [{edge_attrs}];",
+            ]
+            
+            # Ajout des noeuds
+            for node_in_graph_def in graph_json["nodes"]: 
+                node_id_from_graph_def = node_in_graph_def["id"]
+                display_label = node_labels_map[node_id_from_graph_def] 
+
+                if node_id_from_graph_def == current_node_name_in_trace:
+                    # Appliquer le libellé personnalisé pour 'execute_tool' UNIQUEMENT s'il est le nœud mis en évidence
+                    if node_id_from_graph_def == "execute_tool":
+                        # Le Run object correspondant est trace_nodes_runs[i-1] car full_trace_path inclut __start__ au début.
+                        # On s'assure que l'index est valide pour trace_nodes_runs
+                        if i > 0 and i <= len(trace_nodes_runs): 
+                            specific_run = trace_nodes_runs[i-1] # Le Run object de Langsmith pour ce noeud 'execute_tool'
+                            if specific_run.name == "execute_tool": # Double vérification que le nom correspond bien
+                                if specific_run.inputs and 'messages' in specific_run.inputs:
+                                    # Parcourir les messages d'entrée en sens inverse pour trouver le dernier AIMessage avec tool_calls
+                                    for msg_dict in reversed(specific_run.inputs['messages']):
+                                        # Les messages dans LangSmith Run.inputs sont des dictionnaires
+                                        if isinstance(msg_dict, dict) and msg_dict.get('type') == 'ai' and msg_dict.get('tool_calls'):
+                                            first_tool_call = msg_dict['tool_calls'][0] # On prend le premier tool_call (souvent le seul)
+                                            tool_name = first_tool_call['name']
+                                            tool_args = first_tool_call['args']
+                                            
+                                            args_str_parts = []
+                                            for k, v in tool_args.items():
+                                                if isinstance(v, str):
+                                                    args_str_parts.append(f"{k}='{v}'")
+                                                elif isinstance(v, list):
+                                                    # Gère les listes comme [item1, item2]
+                                                    formatted_list = ", ".join([f"'{item}'" if isinstance(item, str) else str(item) for item in v])
+                                                    args_str_parts.append(f"{k}=[{formatted_list}]")
+                                                else:
+                                                    # Gère les nombres et autres types
+                                                    args_str_parts.append(f"{k}={v}")
+                                            
+                                            args_display = ", ".join(args_str_parts)
+                                            if args_display: # Ajoute les parenthèses seulement s'il y a des arguments
+                                                display_label = f"execute_tool : {tool_name} ({args_display})"
+                                            else:
+                                                display_label = f"execute_tool : {tool_name}"
+                                            break # On a trouvé le bon message, on peut sortir de cette boucle interne
+                        else:
+                             print(f"Warning: Index de trace ({i}) hors limites ou nœud spécial pour {node_id_from_graph_def}")
+
+                    # Appliquer le style de surbrillance avec texte en gras et couleur noire
+                    highlight_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["highlight"].items() if 'edge' not in k])
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>, {highlight_attrs}];')
+                else:
+                    # Appliquer le texte en gras pour tous les noeuds non surlignés aussi
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>];') # Utilise le libellé original pour les nœuds non surlignés
+            
+            # Ajout des arêtes
+            for edge in graph_json["edges"]:
+                source = edge["source"]
+                target = edge["target"]
+                
+                # Appliquer le style de surbrillance si c'est l'arête active
+                if source == previous_node_in_trace and target == current_node_name_in_trace:
+                    dot_lines.append(f'  "{source}" -> "{target}" [color="{style_config["highlight"]["edge_color"]}", penwidth=2.5];')
+                else:
+                    dot_lines.append(f'  "{source}" -> "{target}";')
+            
+            dot_lines.append("}")
+            modified_dot = "\n".join(dot_lines)
+            
+            g = graphviz.Source(modified_dot)
+            png_bytes = g.pipe(format='png')
+
+            step_description = f"Step {i+1}: Transition vers le noeud '{current_node_name_in_trace}'"
+            if i == 0:
+                step_description = "Step 1: Début de l'exécution"
+            elif i == len(full_trace_path) - 1:
+                step_description = f"Step {i+1}: Fin de l'exécution"
+            frames.append((step_description, png_bytes))
+
+            previous_node_in_trace = current_node_name_in_trace
+
+        return frames
+
+    except Exception as e:
+        print(f"--- VISUALIZER: Erreur lors de la génération des frames: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+# --- Bloc test main ---
+if __name__ == '__main__':
+    def run_conversation(session_id: str, user_input: str):
+        print(f"\n--- User: {user_input} ---")
+        config = {"configurable": {"thread_id": session_id}}
+        inputs = {"messages": [HumanMessage(content=user_input)]}
+        final_message = None
+        for event in app.stream(inputs, config=config, stream_mode="values"):
+            final_message = event["messages"][-1]
+        if final_message:
+            print(f"\n--- Réponse finale de l'assistant ---\n{final_message.content}")
+            if hasattr(final_message, 'image_base64'):
+                print("\n[L'image a été générée et ajoutée au message final]")
+
+    conversation_id = f"test_session_{uuid.uuid4()}"
+    run_conversation(conversation_id, "Qui sont les créateurs du projet ?")
+
+
+
+---
+File: /agent/app.py
+---
+
+# agent/app.py (Le nouveau fichier d'accueil)
+
+import streamlit as st
+
+# Configure la page pour qu'elle ait un titre, mais elle ne sera visible qu'une fraction de seconde.
+st.set_page_config(
+    page_title="Stella - Assistant Financier",
+    layout="centered"
+)
+
+# Affiche un message de chargement pendant la redirection
+st.title("🚀 Lancement de l'assistant...")
+st.write("Veuillez patienter, redirection en cours vers l'accueil de l'application....")
+
+st.switch_page("pages/1_🏠_Accueil.py")
+
+
+---
+File: /agent/tools.py
+---
+
+# tools.py
+
+import pandas as pd
+import plotly.express as px
+import plotly.io as pio
+from langchain_core.tools import tool
+from io import StringIO
+from typing import List
+
+# --- Import des logiques de src  ---
+from src.search_ticker import search_ticker as _search_ticker_logic
+from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
+from src.preprocess import preprocess_financial_data as _preprocess_data_logic
+from src.analyze import analyse_risks as _analyze_risks_logic
+from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
+from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
+from src.fetch_price import fetch_price_history as _fetch_price_history_logic
+from src.compare_fundamentals import compare_fundamental_metrics as _compare_fundamental_metrics_logic
+from src.compare_prices import compare_price_histories as _compare_price_histories_logic
+# PDF research is imported lazily to avoid initialization delays
+# from src.pdf_research import query_research_document as _query_research_document_logic
+from src.chart_theme import stella_theme
+
+
+# --- Définition des outils ---
+@tool
+def search_ticker(company_name: str) -> str:
+    """
+    Utilise cet outil en PREMIER si l'utilisateur fournit un nom de société (comme 'Apple', 'Microsoft', 'Airbus') 
+    au lieu d'un ticker (comme 'AAPL', 'MSFT', 'AIR.PA').
+    Cet outil trouve le ticker boursier le plus probable pour un nom d'entreprise.
+    
+    Args:
+        company_name (str): Le nom de l'entreprise à rechercher.
+    """
+    # La logique réelle est appelée depuis execute_tool_node, ceci est une coquille pour le LLM.
+    return "[Le ticker est prêt à être recherché par le système.]"
+
+
+@tool
+def fetch_data(ticker: str) -> str:
+    """Récupère les données financières fondamentales pour un ticker boursier donné."""
+    return f"[Les données pour {ticker} sont prêtes à être récupérées par le système.]"
+
+@tool
+def preprocess_data() -> str:
+    """Prépare les données financières récupérées pour la prédiction."""
+    return "[L'étape de preprocessing est prête à être exécutée.]"
+
+@tool
+def analyze_risks() -> str:
+    """Prédit la performance d'une action par rapport au marché en se basant sur les données prétraitées.
+    Utilise un modèle de machine learning pour détecter les risques de sous-performance."""
+    return "[L'étape de prédiction est prête à être exécutée.]"
+
+@tool
+def display_raw_data() -> str:
+    """Affiche le tableau de données financières brutes qui ont été initialement récupérées."""
+    return "[Le tableau de données brutes est prêt à être affiché.]"
+
+@tool
+def display_processed_data() -> str:
+    """Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse."""
+    return "[Le tableau de données traitées est prêt à être affiché.]"
+
+
+def _create_dynamic_chart_logic(
+    data: pd.DataFrame,
+    chart_type: str,
+    x_column: str,
+    y_column: str,
+    title: str,
+    color_column: str = None
+) -> str:
+    """Contient la logique de création de graphique, sans être un outil LangChain."""
+    try:
+        df = data.copy() # On travaille sur une copie
+        if 'calendarYear' in df.columns:
+            df['calendarYear'] = df['calendarYear'].astype(str)
+
+        common_args = {
+            'title': title,
+            'color': color_column,
+            'color_discrete_sequence': stella_theme['colors'] # Appliquer la palette
+        }
+
+        if chart_type == 'line':
+            fig = px.line(df, x=x_column, y=y_column, markers=True, **common_args)
+        elif chart_type == 'bar':
+            fig = px.bar(df, x=x_column, y=y_column, **common_args)
+        elif chart_type == 'scatter':
+            fig = px.scatter(df, x=x_column, y=y_column, **common_args)
+        elif chart_type == 'pie':
+            fig = px.pie(df, names=x_column, values=y_column, title=title, color_discrete_sequence=stella_theme['colors'])
+        else:
+            return f"Erreur : Le type de graphique '{chart_type}' n'est pas supporté."
+
+        fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
+        return pio.to_json(fig)
+
+    except Exception as e:
+        # Il est utile de savoir quelle colonne a posé problème
+        if isinstance(e, KeyError):
+            return f"Erreur: La colonne '{e.args[0]}' est introuvable. Colonnes disponibles: {list(df.columns)}"
+        return f"Erreur lors de la création du graphique : {str(e)}"
+
+# L'outil LangChain qui est "vu" par le LLM
+@tool
+def create_dynamic_chart(
+    chart_type: str,
+    x_column: str,
+    y_column: str,
+    title: str,
+    color_column: str = None
+) -> str:
+    """
+    Crée un graphique dynamique et interactif. Les données sont fournies automatiquement.
+    Tu DOIS utiliser les noms de colonnes exacts qui te sont fournis dans le contexte actuel.
+
+    Args:
+        chart_type (str): Le type de graphique. Supportés : 'line', 'bar', 'scatter', 'pie'.
+        x_column (str): Nom exact de la colonne pour l'axe X.
+        y_column (str): Nom exact de la colonne pour l'axe Y.
+        title (str): Un titre descriptif pour le graphique.
+        color_column (str, optional): Nom exact de la colonne pour la couleur.
+    """
+    return "[L'outil de création de graphique est prêt à être exécuté.]"
+
+@tool
+def get_stock_news(ticker: str, company_name: str = None) -> str:
+    """
+    Utilise cet outil pour trouver les dernières actualités pour une entreprise.
+    Tu peux l'utiliser si on te demande "les nouvelles", "les actualités", "que se passe-t-il avec...".
+    
+    Args:
+        ticker (str): Le ticker de l'action (ex: 'AAPL'). Tu dois le trouver avec search_ticker si besoin.
+        company_name (str, optional): Le nom complet de l'entreprise (ex: 'Apple Inc.'). Peut améliorer la pertinence de la recherche.
+    """
+    return "[Les actualités sont prêtes à être récupérées par le système.]"
+
+@tool
+def get_company_profile(ticker: str) -> str:
+    """
+    Utilise cet outil pour obtenir une description générale d'une entreprise.
+    Fournit des informations comme le secteur, le CEO, une description de l'activité, le site web et beaucoup d'autres.
+    C'est l'outil parfait si l'utilisateur demande "parle-moi de...", "que fait...", ou "qui est..." une entreprise.
+    
+    Args:
+        ticker (str): Le ticker de l'action à rechercher (ex: 'AAPL').
+    """
+    return "[Le profil de l'entreprise est prêt à être récupéré par le système.]"
+
+@tool
+def display_price_chart(ticker: str, period_days: int = 252) -> str:
+    """
+    Affiche un graphique de l'évolution du prix (cours) d'une action sur une période.
+    Utilise cet outil lorsque l'utilisateur demande "le prix", "le cours", "le graphique de l'action", "la performance de l'action", ou "l'évolution de l'action".
+    Args:
+        ticker (str): Le ticker de l'action (ex: 'AAPL'). L'agent doit le trouver si besoin.
+        period_days (int): Le nombre de jours à afficher. 30 pour 1 mois, 90 pour 3 mois, 252 pour 1 an, 1260 pour 5 ans. La valeur par défaut est 252 (1 an).
+    """
+    return "[Le graphique de prix est prêt à être généré.]"
+
+@tool
+def compare_stocks(tickers: List[str], metric: str, comparison_type: str = 'fundamental', period_days: int = 252):
+    """
+    Compare plusieurs actions sur une métrique spécifique. Pour une métrique fondamentale,
+    cela montre l'évolution sur plusieurs années. Pour le prix, cela montre la performance sur une période donnée.
+    C'est l'outil principal pour toute demande contenant "compare", "vs", "versus", "par rapport à".
+
+    Args:
+        tickers (List[str]): La liste des tickers à comparer (ex: ['AAPL', 'MSFT', 'GOOGL']).
+        metric (str): La métrique à comparer. 
+                      - Pour les données fondamentales, utilise le nom exact (ex: 'roe', 'marketCap').
+                      - Pour le prix, utilise TOUJOURS la valeur 'price'.
+        comparison_type (str): Le type de comparaison. 'fundamental' ou 'price'. Le LLM doit déduire
+                               le type en fonction de la métrique demandée ('price' vs autre chose).
+        period_days (int): Pour une comparaison de prix, spécifie la période. 30 (1 mois), 90 (3 mois), 252 (1 an), etc. La valeur par défaut est 252.
+    """
+    return "[La comparaison est prête à être exécutée par le système.]"
+
+@tool
+def query_research(query: str) -> str:
+    """
+    Recherche dans le document de recherche interne de l'équipe pour obtenir des informations
+    sur les méthodologies, analyses, conclusions de recherche, ta stack technique, etc.
+    Utilise cet outil quand l'utilisateur demande des informations sur:
+    - Les recherches de l'équipe
+    - Les méthodologies utilisées
+    - Les conclusions d'études
+    - Des explications théoriques ou techniques
+    
+    Args:
+        query (str): La question ou le sujet à rechercher dans le document de recherche
+    """
+    return "[La recherche dans le document est prête à être exécutée.]"
+
+# --- La liste complète des outils disponibles pour l'agent ---
+available_tools = [
+    search_ticker,
+    fetch_data,
+    get_stock_news,
+    get_company_profile,
+    preprocess_data,
+    analyze_risks,
+    display_raw_data,
+    display_processed_data,
+    create_dynamic_chart,
+    display_price_chart,
+    compare_stocks,
+    query_research
+]

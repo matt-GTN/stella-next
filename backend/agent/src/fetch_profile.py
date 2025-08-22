@@ -19,7 +19,7 @@ def fetch_company_profile(ticker: str) -> str:
     url = f"{BASE_URL}{ticker}&apikey={FMP_API_KEY}"
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)  # 15s timeout pour éviter les blocages
         response.raise_for_status() # Lève une exception pour les erreurs HTTP
 
         data = response.json()
