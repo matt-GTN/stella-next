@@ -17,7 +17,7 @@ import NewsList from "@/components/news/NewsList";
 import CompanyProfile from "@/components/profile/CompanyProfile";
 import ToolCall from "./ToolCall";
 import Spinner from "@/components/Spinner";
-import AgentDecisionDAG from "@/components/visualization/graph/AgentDecisionDAG";
+import { GraphVisualizationWrapper } from "@/components/visualization/graph";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { processMessageForChat, hasAgentActivity as checkAgentActivity } from "@/utils/messageDataProcessor";
 
@@ -474,10 +474,10 @@ export default function ChatMessage({ message: rawMessage }) {
                                 willChange: 'auto'
                               }}
                             >
-                              <AgentDecisionDAG
-                                toolCalls={Array.isArray(message.toolCalls) ? message.toolCalls : []}
-                                allTools={allToolNames}
+                              <GraphVisualizationWrapper
+                                message={message}
                                 language={language}
+                                sessionId={message.sessionId || message.id}
                               />
                             </div>
                           </div>

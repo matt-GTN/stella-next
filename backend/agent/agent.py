@@ -1,6 +1,12 @@
 # agent.py
 from dotenv import load_dotenv
-load_dotenv()
+import os
+
+# Load .env from backend directory regardless of execution context
+# This ensures consistent environment loading whether called directly or via API
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Get backend directory
+env_path = os.path.join(backend_dir, '.env')
+load_dotenv(env_path)
 
 # Variables d'environnement
 import os
@@ -62,7 +68,7 @@ OPENROUTER_MODEL = "google/gemini-2.5-flash-lite"  # GLM-4.5-Air model via OpenR
 LANGSMITH_TRACING = True
 LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
-LANGSMITH_PROJECT = "stella"
+LANGSMITH_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "stella")
 
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
@@ -1013,173 +1019,344 @@ app = get_agent_app()
 
 
 # --- Crée une animation du workflow ---
-def generate_trace_animation_frames(thread_id: str):
+def get_langsmith_trace_data(thread_id: str):
     """
-    Récupère une trace LangSmith et génère une série d'images Graphviz au style moderne.
+    Récupère les données de trace LangSmith pour la visualisation du graphique.
+    Retourne les données structurées sans génération d'images.
     """
-    print(f"--- VISUALIZER: Génération de l'animation pour : {thread_id} ---")
+    print(f"\n{'='*80}")
+    print(f"🔍 LANGSMITH TRACE DEBUG - Starting trace retrieval for: {thread_id}")
+    print(f"{'='*80}")
+    
+    # STEP 1: Environment and configuration check
+    print(f"\n📋 STEP 1: Environment Configuration Check")
+    print(f"   LANGCHAIN_PROJECT: {os.environ.get('LANGCHAIN_PROJECT', '❌ NOT_SET')}")
+    print(f"   LANGSMITH_API_KEY: {'✅ SET' if os.environ.get('LANGSMITH_API_KEY') else '❌ NOT_SET'}")
+    print(f"   LANGCHAIN_TRACING_V2: {os.environ.get('LANGCHAIN_TRACING_V2', '❌ NOT_SET')}")
+    print(f"   LANGCHAIN_ENDPOINT: {os.environ.get('LANGCHAIN_ENDPOINT', '❌ NOT_SET')}")
+    
+    # Check if tracing is enabled
+    if os.environ.get('LANGCHAIN_TRACING_V2') != 'true':
+        print(f"   ⚠️  WARNING: LANGCHAIN_TRACING_V2 is not set to 'true'")
+        print(f"   This means LangSmith tracing might not be active!")
+    
     try:
-        style_config = {
-            "graph": {
-                "fontname": "Arial",
-                "bgcolor": "transparent", # Fond transparent
-                "rankdir": "TB", # Top-to-Bottom layout
-            },
-            "nodes": {
-                "fontname": "Arial",
-                "shape": "box", # Forme rectangulaire
-                "style": "rounded,filled", # Bords arrondis et remplis
-                "fillcolor": "#1C202D", # Couleur de fond des noeuds (thème sombre)
-                "color": "#FAFAFA", # Couleur de la bordure
-                "fontcolor": "#FAFAFA", # Couleur du texte
-                "fontsize": "12", # Taille de police
-            },
-            "edges": {
-                "color": "#6c757d", # Couleur gris doux pour les flèches
-                "arrowsize": "0.8",
-            },
-            "highlight": {
-                "fillcolor": "#33FFBD", # Couleur orange pour le noeud actif (de chart_theme.py)
-                "color": "#33FFBD", # Bordure blanche pour le noeud actif
-                "fontcolor": "#000000", # Couleur noire pour le texte du noeud actif
-                "edge_color": "#33FFBD", # Couleur orange pour la flèche active
-            }
-        }
+        # STEP 2: Initialize LangSmith client
+        print(f"\n🔧 STEP 2: Initializing LangSmith Client")
+        try:
+            from langsmith import Client
+            client = Client()
+            print(f"   ✅ LangSmith client initialized successfully")
+            
+            # Test client connection
+            try:
+                # Try to get client info to test connection
+                print(f"   🔗 Testing client connection...")
+                client_info = client.info
+                print(f"   ✅ Client connection test successful")
+            except Exception as conn_test_error:
+                print(f"   ⚠️  Client connection test failed: {conn_test_error}")
+                print(f"   This might indicate API key or network issues")
+                
+        except ImportError as import_error:
+            print(f"   ❌ Failed to import LangSmith Client: {import_error}")
+            raise import_error
+        except Exception as client_error:
+            print(f"   ❌ Failed to initialize LangSmith client: {client_error}")
+            raise client_error
+        
+        # STEP 3: Query runs with timeout protection
+        print(f"\n🔍 STEP 3: Querying LangSmith Runs")
+        print(f"   Thread ID: {thread_id}")
+        print(f"   Project: {os.environ.get('LANGCHAIN_PROJECT', 'stella')}")
+        
+        # Note: Removed signal-based timeout as it doesn't work in threads
+        # The API endpoint already has asyncio timeout protection
+        
+        all_runs = []
+        try:
+            print(f"   📡 Sending query to LangSmith API...")
+            
+            # Try different query approaches
+            try:
+                # Primary query by thread_id
+                project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
+                print(f"   Using project name: '{project_name}'")
+                
+                # Try querying by thread_id first (might not work with all LangSmith versions)
+                try:
+                    all_runs = list(client.list_runs(
+                        project_name=project_name,
+                        thread_id=thread_id,
+                    ))
+                    print(f"   ✅ Direct thread_id query completed. Found {len(all_runs)} runs")
+                except Exception as thread_query_error:
+                    print(f"   ⚠️  Direct thread_id query failed: {thread_query_error}")
+                    print(f"   🔄 Falling back to manual filtering...")
+                    
+                    # Fallback: get all runs and filter manually
+                    all_project_runs = list(client.list_runs(
+                        project_name=project_name,
+                        limit=100  # Get more runs for better chance of finding the thread
+                    ))
+                    
+                    print(f"   📊 Retrieved {len(all_project_runs)} total runs from project")
+                    
+                    # Filter by thread_id manually
+                    all_runs = []
+                    for run in all_project_runs:
+                        run_thread_id = None
+                        
+                        # Try multiple ways to get thread_id
+                        if hasattr(run, 'thread_id') and run.thread_id:
+                            run_thread_id = run.thread_id
+                        elif hasattr(run, 'extra') and run.extra and 'thread_id' in run.extra:
+                            run_thread_id = run.extra['thread_id']
+                        elif hasattr(run, 'session_id') and run.session_id:
+                            run_thread_id = run.session_id
+                        
+                        if run_thread_id == thread_id:
+                            all_runs.append(run)
+                    
+                    print(f"   🎯 Manual filtering found {len(all_runs)} runs matching thread_id '{thread_id}'")
+                
+            except Exception as primary_query_error:
+                print(f"   ❌ Primary query failed: {primary_query_error}")
+                print(f"   🔄 Trying alternative query without thread_id filter...")
+                
+                # Fallback: query recent runs and filter manually
+                try:
+                    recent_runs = list(client.list_runs(
+                        project_name=project_name,
+                        limit=50  # Get recent runs
+                    ))
+                    all_runs = [run for run in recent_runs if run.thread_id == thread_id]
+                    print(f"   ✅ Fallback query completed. Found {len(all_runs)} matching runs out of {len(recent_runs)} recent runs")
+                    
+                except Exception as fallback_error:
+                    print(f"   ❌ Fallback query also failed: {fallback_error}")
+                    raise fallback_error
+            
+        except Exception as query_error:
+            print(f"   ❌ QUERY ERROR: {type(query_error).__name__}: {query_error}")
+            import traceback
+            print(f"   📋 Full traceback:")
+            for line in traceback.format_exc().split('\n'):
+                if line.strip():
+                    print(f"      {line}")
+            raise query_error
+        finally:
+            pass  # No signal cleanup needed
 
-        client = Client()
-        all_runs = list(client.list_runs(
-            project_name=os.environ.get("LANGCHAIN_PROJECT", "stella"),
-            thread_id=thread_id,
-        ))
-
+        # STEP 4: Analyze query results
+        print(f"\n📊 STEP 4: Analyzing Query Results")
         if not all_runs:
-            print("--- VISUALIZER: Aucune exécution trouvée pour cet ID de thread.")
-            return []
+            print(f"   ❌ No runs found for thread_id: {thread_id}")
+            print(f"   🔍 Possible causes:")
+            print(f"      1. The session hasn't been traced to LangSmith")
+            print(f"      2. The project name doesn't match (current: {os.environ.get('LANGCHAIN_PROJECT', 'stella')})")
+            print(f"      3. The API key doesn't have access to this project")
+            print(f"      4. The thread_id is incorrect or doesn't exist")
+            print(f"      5. Tracing is disabled (LANGCHAIN_TRACING_V2 != 'true')")
+            
+            # Try to list available sessions for debugging
+            try:
+                print(f"   🔍 Attempting to list recent sessions for debugging...")
+                recent_runs = list(client.list_runs(
+                    project_name=project_name,
+                    limit=20
+                ))
+                if recent_runs:
+                    unique_threads = set(run.thread_id for run in recent_runs if run.thread_id)
+                    print(f"   📋 Found {len(unique_threads)} recent thread IDs:")
+                    for i, tid in enumerate(list(unique_threads)[:10]):
+                        print(f"      {i+1:2d}. {tid}")
+                    
+                    # Check if the requested thread_id is similar to any existing ones
+                    print(f"   🔍 Looking for similar thread IDs to: {thread_id}")
+                    for tid in unique_threads:
+                        if thread_id in tid or tid in thread_id:
+                            print(f"      ⚠️  Similar ID found: {tid}")
+                        # Check if it's a UUID vs session format mismatch
+                        if len(thread_id) == 36 and '-' in thread_id and tid.startswith('session_'):
+                            print(f"      💡 UUID format requested but session format found: {tid}")
+                        elif thread_id.startswith('session_') and len(tid) == 36 and '-' in tid:
+                            print(f"      💡 Session format requested but UUID format found: {tid}")
+                else:
+                    print(f"   ❌ No recent runs found in project")
+            except Exception as debug_error:
+                print(f"   ⚠️  Could not list recent sessions: {debug_error}")
+            
+            return None
 
+        print(f"   ✅ Found {len(all_runs)} runs total")
+        print(f"   📋 Run details:")
+        for i, run in enumerate(all_runs[:10]):  # Show first 10 runs
+            status = "✅ completed" if run.end_time else "🔄 running"
+            print(f"      {i+1:2d}. ID: {str(run.id)[:8]}... | Parent: {str(run.parent_run_id)[:8] + '...' if run.parent_run_id else 'None':12} | Name: {run.name:20} | Status: {status}")
+        
+        if len(all_runs) > 10:
+            print(f"      ... and {len(all_runs) - 10} more runs")
+        
+        # STEP 5: Find main thread run
+        print(f"\n🎯 STEP 5: Finding Main Thread Run")
         thread_run = next((r for r in all_runs if not r.parent_run_id), None)
         if not thread_run:
-            print("--- VISUALIZER: Exécution principale du thread introuvable.")
-            return []
+            print(f"   ❌ No main thread run found (all runs have parent_run_id)")
+            print(f"   🔍 This is unexpected - there should be a root run without parent")
+            print(f"   📋 All run parent relationships:")
+            for i, run in enumerate(all_runs):
+                print(f"      {i+1}. {run.name} -> parent: {run.parent_run_id}")
+            return None
 
+        print(f"   ✅ Found main thread run: {thread_run.id}")
+        print(f"      Name: {thread_run.name}")
+        print(f"      Start: {thread_run.start_time}")
+        print(f"      End: {thread_run.end_time}")
+
+        # STEP 6: Find child runs (workflow steps)
+        print(f"\n🔗 STEP 6: Finding Child Runs (Workflow Steps)")
         trace_nodes_runs = sorted(
             [r for r in all_runs if r.parent_run_id == thread_run.id],
-            key=lambda r: r.start_time
+            key=lambda r: r.start_time or r.end_time or 0
         )
-        full_trace_path_names = [run.name for run in trace_nodes_runs]
-        full_trace_path = ["__start__"] + full_trace_path_names + ["__end__"]
 
-        if not trace_nodes_runs:
-            print("--- VISUALIZER: Aucun noeud enfant (étape) trouvé dans la trace.")
-            return []
+        print(f"   ✅ Found {len(trace_nodes_runs)} child runs")
+        if trace_nodes_runs:
+            print(f"   📋 Workflow steps:")
+            for i, run in enumerate(trace_nodes_runs):
+                status = "✅ completed" if run.end_time else "🔄 running"
+                duration = ""
+                if run.start_time and run.end_time:
+                    duration = f" ({(run.end_time - run.start_time).total_seconds():.2f}s)"
+                print(f"      {i+1:2d}. {run.name:20} | {status}{duration}")
+        else:
+            print(f"   ❌ No child runs found - this means no workflow steps were traced")
+            return None
 
-        print(f"--- VISUALIZER: Chemin d'exécution trouvé : {' -> '.join(full_trace_path)}")
-
-        graph_json = app.get_graph().to_json()
+        # STEP 7: Extract tool calls from execute_tool runs
+        print(f"\n🛠️  STEP 7: Extracting Tool Calls")
+        tool_calls = []
+        execute_tool_runs = [run for run in trace_nodes_runs if run.name == "execute_tool"]
         
-        frames = []
-        previous_node_in_trace = full_trace_path[0]
+        print(f"   Found {len(execute_tool_runs)} execute_tool runs")
         
-        node_labels_map = {}
-        for node in graph_json["nodes"]:
-            node_labels_map[node["id"]] = node["data"]["name"] if "data" in node and "name" in node["data"] else node["id"]
-
-
-        for i, current_node_name_in_trace in enumerate(full_trace_path):
-            # Attributs globaux pour le graphe
-            graph_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["graph"].items()])
-            node_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["nodes"].items()])
-            edge_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["edges"].items()])
-
-            dot_lines = [
-                "digraph {",
-                f"  graph [{graph_attrs}];",
-                f"  node [{node_attrs}];",
-                f"  edge [{edge_attrs}];",
-            ]
+        for i, run in enumerate(execute_tool_runs):
+            print(f"   🔍 Analyzing execute_tool run {i+1}/{len(execute_tool_runs)}")
+            print(f"      Run ID: {run.id}")
+            print(f"      Has inputs: {bool(run.inputs)}")
+            print(f"      Has outputs: {bool(run.outputs)}")
             
-            # Ajout des noeuds
-            for node_in_graph_def in graph_json["nodes"]: 
-                node_id_from_graph_def = node_in_graph_def["id"]
-                display_label = node_labels_map[node_id_from_graph_def] 
-
-                if node_id_from_graph_def == current_node_name_in_trace:
-                    # Appliquer le libellé personnalisé pour 'execute_tool' UNIQUEMENT s'il est le nœud mis en évidence
-                    if node_id_from_graph_def == "execute_tool":
-                        # Le Run object correspondant est trace_nodes_runs[i-1] car full_trace_path inclut __start__ au début.
-                        # On s'assure que l'index est valide pour trace_nodes_runs
-                        if i > 0 and i <= len(trace_nodes_runs): 
-                            specific_run = trace_nodes_runs[i-1] # Le Run object de Langsmith pour ce noeud 'execute_tool'
-                            if specific_run.name == "execute_tool": # Double vérification que le nom correspond bien
-                                if specific_run.inputs and 'messages' in specific_run.inputs:
-                                    # Parcourir les messages d'entrée en sens inverse pour trouver le dernier AIMessage avec tool_calls
-                                    for msg_dict in reversed(specific_run.inputs['messages']):
-                                        # Les messages dans LangSmith Run.inputs sont des dictionnaires
-                                        if isinstance(msg_dict, dict) and msg_dict.get('type') == 'ai' and msg_dict.get('tool_calls'):
-                                            first_tool_call = msg_dict['tool_calls'][0] # On prend le premier tool_call (souvent le seul)
-                                            tool_name = first_tool_call['name']
-                                            tool_args = first_tool_call['args']
-                                            
-                                            args_str_parts = []
-                                            for k, v in tool_args.items():
-                                                if isinstance(v, str):
-                                                    args_str_parts.append(f"{k}='{v}'")
-                                                elif isinstance(v, list):
-                                                    # Gère les listes comme [item1, item2]
-                                                    formatted_list = ", ".join([f"'{item}'" if isinstance(item, str) else str(item) for item in v])
-                                                    args_str_parts.append(f"{k}=[{formatted_list}]")
-                                                else:
-                                                    # Gère les nombres et autres types
-                                                    args_str_parts.append(f"{k}={v}")
-                                            
-                                            args_display = ", ".join(args_str_parts)
-                                            if args_display: # Ajoute les parenthèses seulement s'il y a des arguments
-                                                display_label = f"execute_tool : {tool_name} ({args_display})"
-                                            else:
-                                                display_label = f"execute_tool : {tool_name}"
-                                            break # On a trouvé le bon message, on peut sortir de cette boucle interne
-                        else:
-                             print(f"Warning: Index de trace ({i}) hors limites ou nœud spécial pour {node_id_from_graph_def}")
-
-                    # Appliquer le style de surbrillance avec texte en gras et couleur noire
-                    highlight_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["highlight"].items() if 'edge' not in k])
-                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>, {highlight_attrs}];')
-                else:
-                    # Appliquer le texte en gras pour tous les noeuds non surlignés aussi
-                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>];') # Utilise le libellé original pour les nœuds non surlignés
-            
-            # Ajout des arêtes
-            for edge in graph_json["edges"]:
-                source = edge["source"]
-                target = edge["target"]
+            if run.inputs:
+                print(f"      Input keys: {list(run.inputs.keys()) if isinstance(run.inputs, dict) else 'not a dict'}")
                 
-                # Appliquer le style de surbrillance si c'est l'arête active
-                if source == previous_node_in_trace and target == current_node_name_in_trace:
-                    dot_lines.append(f'  "{source}" -> "{target}" [color="{style_config["highlight"]["edge_color"]}", penwidth=2.5];')
+                if 'messages' in run.inputs:
+                    messages = run.inputs['messages']
+                    print(f"      Found {len(messages)} messages in inputs")
+                    
+                    # Look for AI messages with tool calls
+                    for j, msg_dict in enumerate(reversed(messages)):
+                        if isinstance(msg_dict, dict):
+                            msg_type = msg_dict.get('type', 'unknown')
+                            has_tool_calls = bool(msg_dict.get('tool_calls'))
+                            print(f"         Message {j+1}: type={msg_type}, has_tool_calls={has_tool_calls}")
+                            
+                            if msg_type == 'ai' and has_tool_calls:
+                                tool_calls_list = msg_dict['tool_calls']
+                                print(f"         ✅ Found {len(tool_calls_list)} tool calls")
+                                
+                                for k, tc in enumerate(tool_calls_list):
+                                    tool_name = tc.get('name', 'unknown')
+                                    tool_args = tc.get('args', {})
+                                    print(f"            Tool {k+1}: {tool_name} with args: {tool_args}")
+                                    
+                                    # Create tool call object
+                                    tool_call = {
+                                        'name': tool_name,
+                                        'arguments': tool_args,
+                                        'status': 'completed' if run.end_time else 'executing',
+                                        'execution_time': (run.end_time - run.start_time).total_seconds() * 1000 if run.end_time and run.start_time else 0,
+                                        'timestamp': run.start_time.isoformat() if run.start_time else None,
+                                        'run_id': str(run.id),
+                                        'error': getattr(run, 'error', None)
+                                    }
+                                    
+                                    # Add results if available
+                                    if run.outputs:
+                                        tool_call['result'] = run.outputs
+                                        print(f"            Added outputs to tool call")
+                                    
+                                    tool_calls.append(tool_call)
+                                    print(f"            ✅ Tool call added to results")
+                                
+                                break  # Found the AI message with tool calls
                 else:
-                    dot_lines.append(f'  "{source}" -> "{target}";')
-            
-            dot_lines.append("}")
-            modified_dot = "\n".join(dot_lines)
-            
-            g = graphviz.Source(modified_dot)
-            png_bytes = g.pipe(format='png')
+                    print(f"      ❌ No 'messages' key in inputs")
+            else:
+                print(f"      ❌ No inputs found for this run")
 
-            step_description = f"Step {i+1}: Transition vers le noeud '{current_node_name_in_trace}'"
-            if i == 0:
-                step_description = "Step 1: Début de l'exécution"
-            elif i == len(full_trace_path) - 1:
-                step_description = f"Step {i+1}: Fin de l'exécution"
-            frames.append((step_description, png_bytes))
+        print(f"   ✅ Extracted {len(tool_calls)} tool calls total")
 
-            previous_node_in_trace = current_node_name_in_trace
+        # STEP 8: Get graph structure
+        print(f"\n📊 STEP 8: Getting Graph Structure")
+        try:
+            graph_json = app.get_graph().to_json()
+            nodes_count = len(graph_json.get('nodes', []))
+            edges_count = len(graph_json.get('edges', []))
+            print(f"   ✅ Graph structure retrieved: {nodes_count} nodes, {edges_count} edges")
+        except Exception as graph_error:
+            print(f"   ⚠️  Could not get graph structure: {graph_error}")
+            graph_json = {'nodes': [], 'edges': []}
 
-        return frames
+        # STEP 9: Build final trace data
+        print(f"\n🏗️  STEP 9: Building Final Trace Data")
+        trace_data = {
+            'thread_id': thread_id,
+            'tool_calls': tool_calls,
+            'execution_path': [run.name for run in trace_nodes_runs],
+            'graph_structure': {
+                'nodes': graph_json.get('nodes', []),
+                'edges': graph_json.get('edges', [])
+            },
+            'total_execution_time': sum(tc.get('execution_time', 0) for tc in tool_calls),
+            'status': 'completed' if all(tc.get('status') == 'completed' for tc in tool_calls) else 'partial'
+        }
+
+        print(f"   ✅ Trace data built successfully")
+        print(f"      Thread ID: {trace_data['thread_id']}")
+        print(f"      Tool calls: {len(trace_data['tool_calls'])}")
+        print(f"      Execution path: {trace_data['execution_path']}")
+        print(f"      Total execution time: {trace_data['total_execution_time']:.2f}ms")
+        print(f"      Status: {trace_data['status']}")
+
+        print(f"\n{'='*80}")
+        print(f"✅ LANGSMITH TRACE DEBUG - Successfully completed!")
+        print(f"{'='*80}\n")
+        
+        return trace_data
 
     except Exception as e:
-        print(f"--- VISUALIZER: Erreur lors de la génération des frames: {e}")
+        print(f"\n{'='*80}")
+        print(f"❌ LANGSMITH TRACE DEBUG - ERROR OCCURRED!")
+        print(f"{'='*80}")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        print(f"\n📋 Full traceback:")
         import traceback
-        traceback.print_exc()
-        return []
+        for line in traceback.format_exc().split('\n'):
+            if line.strip():
+                print(f"   {line}")
+        print(f"{'='*80}\n")
+        return None
+
+def generate_trace_animation_frames(thread_id: str):
+    """
+    DEPRECATED: Utiliser get_langsmith_trace_data() à la place.
+    Maintenu pour compatibilité avec l'API existante.
+    """
+    print(f"--- DEPRECATED: generate_trace_animation_frames appelé pour {thread_id}")
+    print("--- Utilisez get_langsmith_trace_data() à la place")
+    return []
 
 # --- Bloc test main ---
 if __name__ == '__main__':

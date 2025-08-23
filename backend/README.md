@@ -11,11 +11,17 @@ A simple FastAPI wrapper for the Stella Financial Assistant agent.
    This will create a virtual environment, install dependencies, and start the server.
 
 2. **Configure API keys:**
-   Edit the `.env` file with your API keys:
+   Copy the example file and edit it with your API keys:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `backend/.env`:
    ```env
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    LANGSMITH_API_KEY=your_langsmith_api_key_here
-   LANGSMITH_PROJECT=stella
+   LANGCHAIN_PROJECT=stella-next
+   FMP_API_KEY=your_fmp_api_key_here
+   NEWS_API_KEY=your_news_api_key_here
    ```
 
 3. **Start the API:**

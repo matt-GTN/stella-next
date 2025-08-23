@@ -33,7 +33,7 @@ os.chdir(agent_dir)
 # Import your existing agent from the current agent directory
 import agent as agent_module
 from langchain_core.messages import HumanMessage
-from agent import generate_trace_animation_frames
+from agent import generate_trace_animation_frames, get_langsmith_trace_data
 import base64
 
 # Get the app from the agent module
@@ -97,6 +97,15 @@ class AnimationFrame(BaseModel):
 class AnimationFramesResponse(BaseModel):
     frames: list[AnimationFrame]
     session_id: str
+    timestamp: str
+
+class LangSmithTraceResponse(BaseModel):
+    thread_id: str
+    tool_calls: list[dict]
+    execution_path: list[str]
+    graph_structure: dict
+    total_execution_time: float
+    status: str
     timestamp: str
 
 # Health check
@@ -189,7 +198,317 @@ async def chat_with_stella_stream(request: ChatRequest):
         }
     )
 
-# Animation frames endpoint
+# List available LangSmith sessions with detailed debugging
+@app.get("/langsmith-sessions")
+async def list_langsmith_sessions():
+    """
+    Liste les sessions LangSmith disponibles
+    """
+    try:
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            from langsmith import Client
+            client = Client()
+            
+            # Récupérer les dernières exécutions
+            project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
+            logger.info(f"🔍 [LANGSMITH SESSIONS] Using project: {project_name}")
+            
+            recent_runs = list(client.list_runs(
+                project_name=project_name,
+                limit=20
+            ))
+            
+            # Debug: Check what attributes are available on Run objects
+            logger.info(f"🔍 [LANGSMITH SESSIONS] Debugging Run object attributes...")
+            if recent_runs:
+                sample_run = recent_runs[0]
+                logger.info(f"   Sample run attributes: {[attr for attr in dir(sample_run) if not attr.startswith('_')]}")
+                
+                # Try different ways to get thread_id
+                thread_id_candidates = []
+                for attr in ['thread_id', 'session_id', 'trace_id']:
+                    if hasattr(sample_run, attr):
+                        value = getattr(sample_run, attr)
+                        thread_id_candidates.append(f"{attr}: {value}")
+                        logger.info(f"   Found {attr}: {value}")
+                
+                # Check extra field
+                if hasattr(sample_run, 'extra') and sample_run.extra:
+                    logger.info(f"   Extra fields: {sample_run.extra}")
+                    if 'thread_id' in sample_run.extra:
+                        logger.info(f"   Thread ID in extra: {sample_run.extra['thread_id']}")
+            
+            # Extraire les thread_ids uniques avec plus de détails
+            thread_data = []
+            for run in recent_runs:
+                # Try multiple ways to get thread_id
+                thread_id = None
+                
+                # Method 1: Direct attribute
+                if hasattr(run, 'thread_id') and run.thread_id:
+                    thread_id = run.thread_id
+                # Method 2: Extra field
+                elif hasattr(run, 'extra') and run.extra and 'thread_id' in run.extra:
+                    thread_id = run.extra['thread_id']
+                # Method 3: Session ID as fallback
+                elif hasattr(run, 'session_id') and run.session_id:
+                    thread_id = run.session_id
+                
+                if thread_id:
+                    thread_data.append({
+                        "thread_id": thread_id,
+                        "run_id": str(run.id),
+                        "name": run.name,
+                        "start_time": run.start_time.isoformat() if run.start_time else None,
+                        "has_parent": bool(getattr(run, 'parent_run_id', None))
+                    })
+            
+            # Group by thread_id
+            threads_by_id = {}
+            for data in thread_data:
+                tid = data["thread_id"]
+                if tid not in threads_by_id:
+                    threads_by_id[tid] = []
+                threads_by_id[tid].append(data)
+            
+            thread_ids = list(threads_by_id.keys())
+            
+            logger.info(f"✅ [LANGSMITH SESSIONS] Found {len(recent_runs)} runs, {len(thread_ids)} unique threads")
+            
+            return {
+                "available_sessions": thread_ids[:10],  # Limiter à 10
+                "total_runs": len(recent_runs),
+                "project": project_name,
+                "detailed_sessions": {tid: runs for tid, runs in list(threads_by_id.items())[:5]},  # Show details for first 5
+                "debug_info": {
+                    "langchain_tracing_v2": os.environ.get("LANGCHAIN_TRACING_V2", "not_set"),
+                    "langsmith_api_key_set": bool(os.environ.get("LANGSMITH_API_KEY")),
+                    "langchain_endpoint": os.environ.get("LANGCHAIN_ENDPOINT", "not_set")
+                }
+            }
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except Exception as e:
+        logger.error(f"❌ [LANGSMITH SESSIONS] Error listing sessions: {type(e).__name__}: {str(e)}")
+        logger.error(f"📋 [LANGSMITH SESSIONS] Full traceback:", exc_info=True)
+        return {
+            "available_sessions": [],
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "debug_info": {
+                "project": os.environ.get("LANGCHAIN_PROJECT", "stella"),
+                "langchain_tracing_v2": os.environ.get("LANGCHAIN_TRACING_V2", "not_set"),
+                "langsmith_api_key_set": bool(os.environ.get("LANGSMITH_API_KEY")),
+                "langchain_endpoint": os.environ.get("LANGCHAIN_ENDPOINT", "not_set")
+            }
+        }
+
+# Search for sessions by partial ID or pattern
+@app.get("/langsmith-sessions/search/{partial_id}")
+async def search_langsmith_sessions(partial_id: str):
+    """
+    Search for LangSmith sessions by partial ID match
+    """
+    try:
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            from langsmith import Client
+            client = Client()
+            project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
+            
+            logger.info(f"🔍 [LANGSMITH SEARCH] Searching for sessions matching: {partial_id}")
+            
+            # Get more recent runs for better search
+            recent_runs = list(client.list_runs(
+                project_name=project_name,
+                limit=50
+            ))
+            
+            # Find matching thread IDs
+            matching_sessions = []
+            all_thread_ids = set(run.thread_id for run in recent_runs if run.thread_id)
+            
+            for thread_id in all_thread_ids:
+                if partial_id.lower() in thread_id.lower():
+                    # Get runs for this thread
+                    thread_runs = [run for run in recent_runs if run.thread_id == thread_id]
+                    matching_sessions.append({
+                        "thread_id": thread_id,
+                        "run_count": len(thread_runs),
+                        "latest_run": max(thread_runs, key=lambda r: r.start_time or r.end_time or 0).start_time.isoformat() if thread_runs else None,
+                        "match_type": "exact" if partial_id == thread_id else "partial"
+                    })
+            
+            logger.info(f"✅ [LANGSMITH SEARCH] Found {len(matching_sessions)} matching sessions")
+            
+            return {
+                "search_term": partial_id,
+                "matching_sessions": matching_sessions,
+                "total_searched": len(all_thread_ids),
+                "project": project_name
+            }
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except Exception as e:
+        logger.error(f"❌ [LANGSMITH SEARCH] Error searching sessions: {str(e)}")
+        return {
+            "search_term": partial_id,
+            "matching_sessions": [],
+            "error": str(e)
+        }
+
+# Test endpoint with mock LangSmith data
+@app.get("/langsmith-trace/test-mock")
+async def get_mock_langsmith_trace():
+    """
+    Endpoint de test avec des données LangSmith simulées
+    """
+    return {
+        "thread_id": "test-mock",
+        "tool_calls": [
+            {
+                "name": "search_ticker",
+                "arguments": {"symbol": "AAPL"},
+                "status": "completed",
+                "execution_time": 1250,
+                "timestamp": "2024-01-01T12:00:00Z",
+                "run_id": "run_123",
+                "result": {"ticker": "AAPL"},
+                "error": None
+            },
+            {
+                "name": "fetch_data",
+                "arguments": {"ticker": "AAPL"},
+                "status": "completed", 
+                "execution_time": 2100,
+                "timestamp": "2024-01-01T12:00:01Z",
+                "run_id": "run_124",
+                "result": {"data": "..."},
+                "error": None
+            }
+        ],
+        "execution_path": ["agent", "execute_tool", "execute_tool", "generate_final_response"],
+        "graph_structure": {"nodes": [], "edges": []},
+        "total_execution_time": 3350,
+        "status": "completed",
+        "timestamp": datetime.now().isoformat()
+    }
+
+# LangSmith trace data endpoint
+@app.get("/langsmith-trace/{session_id}", response_model=LangSmithTraceResponse)
+async def get_langsmith_trace(session_id: str):
+    """
+    Get LangSmith trace data for graph visualization
+    """
+    try:
+        logger.info(f"🔍 [LANGSMITH API] Starting trace retrieval for session: {session_id}")
+        logger.info(f"🔧 [LANGSMITH API] LangSmith configuration:")
+        logger.info(f"   - Project: {os.environ.get('LANGCHAIN_PROJECT', 'stella')}")
+        logger.info(f"   - Tracing enabled: {os.environ.get('LANGCHAIN_TRACING_V2', 'false')}")
+        logger.info(f"   - API key set: {'Yes' if os.environ.get('LANGSMITH_API_KEY') else 'No'}")
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        logger.info(f"🔧 [LANGSMITH API] Changing to agent directory: {agent_dir}")
+        os.chdir(agent_dir)
+        
+        try:
+            # Get the trace data using the new function with timeout
+            import asyncio
+            
+            async def get_trace_with_timeout():
+                logger.info(f"⏱️  [LANGSMITH API] Starting trace data retrieval with timeout...")
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, get_langsmith_trace_data, session_id)
+            
+            # Timeout après 15 secondes (increased for debugging)
+            logger.info(f"⏱️  [LANGSMITH API] Setting 15-second timeout for trace retrieval...")
+            trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=15.0)
+            
+            if not trace_data:
+                logger.warning(f"❌ [LANGSMITH API] No trace data returned for session {session_id}")
+                logger.warning(f"🔍 [LANGSMITH API] This could indicate:")
+                logger.warning(f"   1. Session not found in LangSmith")
+                logger.warning(f"   2. LangSmith tracing not enabled")
+                logger.warning(f"   3. API key or project configuration issues")
+                logger.warning(f"   4. Network connectivity problems")
+                
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No LangSmith trace data found for session {session_id}. Check the backend logs for detailed debugging information. Make sure you've had a recent conversation with Stella and that LangSmith tracing is properly configured."
+                )
+            
+            logger.info(f"✅ [LANGSMITH API] Trace data retrieved successfully")
+            logger.info(f"📊 [LANGSMITH API] Data summary:")
+            logger.info(f"   - Thread ID: {trace_data['thread_id']}")
+            logger.info(f"   - Tool calls: {len(trace_data['tool_calls'])}")
+            logger.info(f"   - Execution path: {trace_data['execution_path']}")
+            logger.info(f"   - Status: {trace_data['status']}")
+            logger.info(f"   - Total execution time: {trace_data['total_execution_time']:.2f}ms")
+            
+            response = LangSmithTraceResponse(
+                thread_id=trace_data['thread_id'],
+                tool_calls=trace_data['tool_calls'],
+                execution_path=trace_data['execution_path'],
+                graph_structure=trace_data['graph_structure'],
+                total_execution_time=trace_data['total_execution_time'],
+                status=trace_data['status'],
+                timestamp=datetime.now().isoformat()
+            )
+            
+            logger.info(f"✅ [LANGSMITH API] Successfully built response for session {session_id}")
+            return response
+            
+        except asyncio.TimeoutError:
+            logger.error(f"⏱️  [LANGSMITH API] TIMEOUT: Trace retrieval exceeded 15 seconds for session {session_id}")
+            logger.error(f"🔍 [LANGSMITH API] This suggests:")
+            logger.error(f"   1. LangSmith API is slow or unresponsive")
+            logger.error(f"   2. Network connectivity issues")
+            logger.error(f"   3. Large amount of trace data to process")
+            
+            raise HTTPException(
+                status_code=408,
+                detail=f"Timeout while fetching LangSmith trace data for session {session_id}. The LangSmith API took too long to respond. Check your network connection and try again."
+            )
+        except Exception as inner_error:
+            logger.error(f"❌ [LANGSMITH API] Inner exception during trace retrieval: {type(inner_error).__name__}: {inner_error}")
+            logger.error(f"📋 [LANGSMITH API] Full traceback:", exc_info=True)
+            raise inner_error
+        finally:
+            # Always change back to original directory
+            logger.info(f"🔧 [LANGSMITH API] Changing back to original directory: {current_dir}")
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions (they already have proper error messages)
+        raise
+    except Exception as e:
+        logger.error(f"❌ [LANGSMITH API] Unexpected error fetching trace data for session {session_id}")
+        logger.error(f"   Error type: {type(e).__name__}")
+        logger.error(f"   Error message: {str(e)}")
+        logger.error(f"📋 [LANGSMITH API] Full traceback:", exc_info=True)
+        
+        # Provide a detailed error message to the frontend
+        error_detail = f"Failed to fetch LangSmith trace data: {type(e).__name__}: {str(e)}. Check the backend logs for detailed debugging information."
+        
+        raise HTTPException(
+            status_code=500,
+            detail=error_detail
+        )
+
+# Animation frames endpoint (deprecated but maintained for compatibility)
 @app.get("/animation-frames/{session_id}", response_model=AnimationFramesResponse)
 async def get_animation_frames(session_id: str):
     """

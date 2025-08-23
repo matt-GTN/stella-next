@@ -33,7 +33,7 @@ function useToolUniverse(toolCalls, allTools) {
   }, [toolCalls, allTools]);
 }
 
-function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "default", index = 0 }) {
+function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "default", index = 0, icon = null }) {
   // Different colors and styles based on node type
   const getNodeStyle = () => {
     switch(type) {
@@ -42,9 +42,15 @@ function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "defaul
       case 'agent':
         return { fill: "#fef3c7", stroke: "#f59e0b", textColor: "#78350f" };
       case 'execute':
+      case 'tool_execution':
         return { fill: "#fce7f3", stroke: "#ec4899", textColor: "#831843" };
       case 'final':
+      case 'preparation':
         return { fill: "#ede9fe", stroke: "#8b5cf6", textColor: "#4c1d95" };
+      case 'end':
+        return { fill: "#f1f5f9", stroke: "#64748b", textColor: "#334155" };
+      case 'error':
+        return { fill: "#fef2f2", stroke: "#ef4444", textColor: "#7f1d1d" };
       case 'tool-used':
         return { fill: "#dcfce7", stroke: "#4ade80", textColor: "#14532d" };
       case 'tool-unused':
@@ -80,11 +86,21 @@ function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "defaul
         whileHover={{ strokeWidth: 3 }}
         transition={{ duration: 0.2 }}
       />
-      <text x={x + w/2} y={y + 30} fontSize={15} fontWeight="600" fill={style.textColor} textAnchor="middle">
+      {/* Icon */}
+      {icon && (
+        <text x={x + w/2} y={y + 25} fontSize={16} textAnchor="middle">
+          {icon}
+        </text>
+      )}
+      
+      {/* Title */}
+      <text x={x + w/2} y={icon ? y + 45 : y + 30} fontSize={13} fontWeight="600" fill={style.textColor} textAnchor="middle">
         {title.length > 15 ? title.substring(0, 15) + "..." : title}
       </text>
-      {subtitle ? (
-        <text x={x + w/2} y={y + 52} fontSize={12} fill={style.textColor} opacity="0.7" textAnchor="middle">
+      
+      {/* Subtitle */}
+      {subtitle && !icon ? (
+        <text x={x + w/2} y={y + 52} fontSize={11} fill={style.textColor} opacity="0.7" textAnchor="middle">
           {subtitle.length > 20 ? subtitle.substring(0, 20) + "..." : subtitle}
         </text>
       ) : null}
@@ -117,8 +133,26 @@ function Edge({ d, highlighted = false, dashed = false, index = 0 }) {
  * - Start -> Agent -> Execute steps -> Final (horizontal flow)
  * - Tools universe displayed above/below the main flow
  * - Edges between sequential path nodes and from Execute -> Tool used
+ * 
+ * Supports both legacy format (toolCalls, allTools) and new graphData format
  */
-export default function AgentDecisionDAG({ toolCalls = [], allTools = [], language = "en" }) {
+export default function AgentDecisionDAG({ 
+  toolCalls = [], 
+  allTools = [], 
+  graphData = null,
+  language = "en" 
+}) {
+  // Determine if we're using new graphData format or legacy format
+  const isLangSmithData = graphData && graphData.nodes && graphData.edges;
+  
+  console.log('🎨 [AgentDecisionDAG] Rendering with:', {
+    isLangSmithData,
+    graphDataNodes: graphData?.nodes?.length || 0,
+    graphDataEdges: graphData?.edges?.length || 0,
+    legacyToolCalls: toolCalls?.length || 0,
+    graphData: graphData
+  });
+
   const toolUniverse = useToolUniverse(toolCalls, allTools);
 
   // Layout constants for left-to-right layout (wider to match charts)
@@ -129,118 +163,239 @@ export default function AgentDecisionDAG({ toolCalls = [], allTools = [], langua
   const toolRowY = 220; // Y position for tools row
   const mainFlowY = 80; // Y position for main flow
 
-  // Build path nodes: Start -> Agent -> Execute steps -> Final
+  // Build path nodes: either from graphData or legacy format
   const pathNodes = React.useMemo(() => {
-    const list = [];
-    list.push({ id: "start", type: "start", title: language === 'fr' ? 'Début' : 'Start', subtitle: null });
-    list.push({ id: "agent", type: "agent", title: language === 'fr' ? "Agent" : 'Agent', subtitle: language === 'fr' ? "Analyse" : 'Analysis' });
-    (Array.isArray(toolCalls) ? toolCalls : []).forEach((tc, i) => {
-      const name = tc?.name || tc?.tool_name || 'tool';
-      list.push({ id: `exec-${i}`, type: "execute", title: name, subtitle: language === 'fr' ? 'Exécution' : 'Execution' });
-    });
-    list.push({ id: "final", type: "final", title: language === 'fr' ? 'Fin' : 'Complete', subtitle: null });
-    return list;
-  }, [toolCalls, language]);
+    if (isLangSmithData) {
+      // Use LangSmith graph structure
+      console.log('🎨 [AgentDecisionDAG] Using LangSmith nodes:', graphData.nodes);
+      
+      return graphData.nodes
+        .filter(node => !node.type || node.type !== 'tool_detail') // Exclude tool detail nodes from main flow
+        .map(node => ({
+          id: node.id,
+          type: node.type || 'default',
+          title: (node.label && typeof node.label === 'object') 
+            ? (node.label[language] || node.label.en || node.label.fr || node.id)
+            : (node.label || node.id),
+          subtitle: node.icon || null,
+          icon: node.icon,
+          isActive: node.isActive,
+          isExecuted: node.isExecuted,
+          isExecuting: node.isExecuting
+        }));
+    } else {
+      // Legacy format
+      const list = [];
+      list.push({ id: "start", type: "start", title: language === 'fr' ? 'Début' : 'Start', subtitle: null });
+      list.push({ id: "agent", type: "agent", title: language === 'fr' ? "Agent" : 'Agent', subtitle: language === 'fr' ? "Analyse" : 'Analysis' });
+      (Array.isArray(toolCalls) ? toolCalls : []).forEach((tc, i) => {
+        const name = tc?.name || tc?.tool_name || 'tool';
+        list.push({ id: `exec-${i}`, type: "execute", title: name, subtitle: language === 'fr' ? 'Exécution' : 'Execution' });
+      });
+      list.push({ id: "final", type: "final", title: language === 'fr' ? 'Fin' : 'Complete', subtitle: null });
+      return list;
+    }
+  }, [graphData, toolCalls, language, isLangSmithData]);
 
-  // Compute positions for left-to-right layout
+  // Compute positions based on data type
   const positions = React.useMemo(() => {
     const pos = {};
     
-    // Calculate available width for better horizontal distribution
-    const totalMainFlowWidth = pathNodes.length * stepX;
-    const minChartWidth = 800; // Minimum width to match chart containers
-    const availableWidth = Math.max(totalMainFlowWidth, minChartWidth);
-    
-    // Distribute main flow nodes across full width
-    const flowStepX = pathNodes.length > 1 ? (availableWidth - 2 * pad - nodeW) / (pathNodes.length - 1) : stepX;
-    
-    pathNodes.forEach((n, idx) => {
-      pos[n.id] = { 
-        x: pad + idx * flowStepX, 
-        y: mainFlowY, 
-        w: nodeW, 
-        h: nodeH 
-      };
-    });
-    
-    // Tools distributed across the full width below
-    if (toolUniverse.length > 0) {
-      const toolsWidth = availableWidth - 2 * pad;
-      const toolSpacing = toolUniverse.length > 1 ? toolsWidth / (toolUniverse.length - 1) : toolsWidth / 2;
+    if (isLangSmithData) {
+      // LangSmith layout - vertical workflow like your desired image
+      console.log('🎨 [AgentDecisionDAG] Computing LangSmith layout for nodes:', pathNodes.map(n => n.id));
       
-      toolUniverse.forEach((name, idx) => {
-        const id = `tool:${name}`;
-        pos[id] = { 
-          x: pad + (toolUniverse.length === 1 ? toolsWidth / 2 - nodeW / 2 : idx * toolSpacing), 
-          y: toolRowY, 
+      const centerX = 400; // Center of the graph
+      const minChartWidth = 800;
+      
+      // Define specific positions for LangSmith workflow nodes
+      const nodePositions = {
+        '__start__': { x: centerX - nodeW/2, y: 20 },
+        'agent': { x: centerX - nodeW/2, y: 120 },
+        'execute_tool': { x: centerX - nodeW/2, y: 220 },
+        
+        // Preparation nodes in a row
+        'generate_final_response': { x: 50, y: 320 },
+        'handle_error': { x: 200, y: 320 },
+        'prepare_chart_display': { x: 350, y: 320 },
+        'prepare_data_display': { x: 500, y: 320 },
+        'prepare_news_display': { x: 650, y: 320 },
+        'prepare_profile_display': { x: 800, y: 320 },
+        
+        'cleanup_state': { x: centerX - nodeW/2, y: 420 },
+        '__end__': { x: centerX - nodeW/2, y: 520 }
+      };
+      
+      // Apply positions to all nodes
+      pathNodes.forEach(node => {
+        if (nodePositions[node.id]) {
+          pos[node.id] = { 
+            ...nodePositions[node.id], 
+            w: nodeW, 
+            h: nodeH 
+          };
+        } else {
+          // Fallback position for unknown nodes
+          pos[node.id] = { 
+            x: centerX - nodeW/2, 
+            y: 300, 
+            w: nodeW, 
+            h: nodeH 
+          };
+        }
+      });
+      
+    } else {
+      // Legacy horizontal layout
+      const totalMainFlowWidth = pathNodes.length * stepX;
+      const minChartWidth = 800;
+      const availableWidth = Math.max(totalMainFlowWidth, minChartWidth);
+      
+      const flowStepX = pathNodes.length > 1 ? (availableWidth - 2 * pad - nodeW) / (pathNodes.length - 1) : stepX;
+      
+      pathNodes.forEach((n, idx) => {
+        pos[n.id] = { 
+          x: pad + idx * flowStepX, 
+          y: mainFlowY, 
           w: nodeW, 
           h: nodeH 
         };
       });
+      
+      // Tools distributed across the full width below
+      if (toolUniverse.length > 0) {
+        const toolsWidth = availableWidth - 2 * pad;
+        const toolSpacing = toolUniverse.length > 1 ? toolsWidth / (toolUniverse.length - 1) : toolsWidth / 2;
+        
+        toolUniverse.forEach((name, idx) => {
+          const id = `tool:${name}`;
+          pos[id] = { 
+            x: pad + (toolUniverse.length === 1 ? toolsWidth / 2 - nodeW / 2 : idx * toolSpacing), 
+            y: toolRowY, 
+            w: nodeW, 
+            h: nodeH 
+          };
+        });
+      }
     }
     
+    console.log('🎨 [AgentDecisionDAG] Computed positions:', pos);
     return pos;
-  }, [pathNodes, toolUniverse]);
+  }, [pathNodes, toolUniverse, isLangSmithData]);
 
-  // Build edges (no arrows from agent to tools)
+  // Build edges
   const edges = React.useMemo(() => {
     const list = [];
     
-    // Sequential path edges (horizontal)
-    for (let i = 0; i < pathNodes.length - 1; i++) {
-      const a = positions[pathNodes[i].id];
-      const b = positions[pathNodes[i + 1].id];
-      if (!a || !b) continue;
+    if (isLangSmithData && graphData.edges) {
+      // Use LangSmith edges with smart routing
+      console.log('🎨 [AgentDecisionDAG] Using LangSmith edges:', graphData.edges);
       
-      const x0 = a.x + a.w;
-      const y0 = a.y + a.h / 2;
-      const x1 = b.x;
-      const y1 = b.y + b.h / 2;
+      graphData.edges.forEach((edge, index) => {
+        const fromPos = positions[edge.from];
+        const toPos = positions[edge.to];
+        
+        if (!fromPos || !toPos) {
+          console.warn('🎨 [AgentDecisionDAG] Missing position for edge:', edge.from, '->', edge.to);
+          return;
+        }
+        
+        // Smart edge routing based on node positions
+        let d;
+        
+        // Check if it's a vertical connection (same X or close)
+        const isVertical = Math.abs((fromPos.x + fromPos.w/2) - (toPos.x + toPos.w/2)) < 50;
+        
+        if (isVertical) {
+          // Vertical connection (straight down)
+          const x = fromPos.x + fromPos.w / 2;
+          const y0 = fromPos.y + fromPos.h;
+          const y1 = toPos.y;
+          d = `M ${x},${y0} L ${x},${y1}`;
+        } else {
+          // Branching connection (from execute_tool to preparation nodes)
+          const x0 = fromPos.x + fromPos.w / 2;
+          const y0 = fromPos.y + fromPos.h;
+          const x1 = toPos.x + toPos.w / 2;
+          const y1 = toPos.y;
+          
+          // Create a curved path that goes down then across
+          const midY = y0 + (y1 - y0) * 0.3;
+          d = `M ${x0},${y0} L ${x0},${midY} L ${x1},${midY} L ${x1},${y1}`;
+        }
+        
+        list.push({ 
+          id: edge.id || `edge-${index}`, 
+          d, 
+          highlighted: edge.isActive !== false, 
+          dashed: edge.condition === 'conditional',
+          index 
+        });
+      });
+    } else {
+      // Legacy edge logic
+      // Sequential path edges (horizontal)
+      for (let i = 0; i < pathNodes.length - 1; i++) {
+        const a = positions[pathNodes[i].id];
+        const b = positions[pathNodes[i + 1].id];
+        if (!a || !b) continue;
+        
+        const x0 = a.x + a.w;
+        const y0 = a.y + a.h / 2;
+        const x1 = b.x;
+        const y1 = b.y + b.h / 2;
+        
+        // Smooth horizontal bezier curve
+        const controlOffset = 40;
+        const d = `M ${x0},${y0} C ${x0 + controlOffset},${y0} ${x1 - controlOffset},${y1} ${x1},${y1}`;
+        list.push({ id: `p-${i}`, d, highlighted: true, index: i });
+      }
       
-      // Smooth horizontal bezier curve
-      const controlOffset = 40;
-      const d = `M ${x0},${y0} C ${x0 + controlOffset},${y0} ${x1 - controlOffset},${y1} ${x1},${y1}`;
-      list.push({ id: `p-${i}`, d, highlighted: true, index: i });
+      // Execute -> Tool edges (vertical connections)
+      (Array.isArray(toolCalls) ? toolCalls : []).forEach((tc, i) => {
+        const exec = positions[`exec-${i}`];
+        const name = tc?.name || tc?.tool_name;
+        if (!exec || !name) return;
+        
+        const tool = positions[`tool:${name}`];
+        if (!tool) return;
+        
+        const x0 = exec.x + exec.w / 2;
+        const y0 = exec.y + exec.h;
+        const x1 = tool.x + tool.w / 2;
+        const y1 = tool.y;
+        
+        // Curved connection from execute to tool
+        const d = `M ${x0},${y0} C ${x0},${y0 + 30} ${x1},${y1 - 30} ${x1},${y1}`;
+        list.push({ id: `et-${i}`, d, highlighted: true, dashed: false, index: pathNodes.length + i });
+      });
     }
     
-    // Execute -> Tool edges (vertical connections)
-    (Array.isArray(toolCalls) ? toolCalls : []).forEach((tc, i) => {
-      const exec = positions[`exec-${i}`];
-      const name = tc?.name || tc?.tool_name;
-      if (!exec || !name) return;
-      
-      const tool = positions[`tool:${name}`];
-      if (!tool) return;
-      
-      const x0 = exec.x + exec.w / 2;
-      const y0 = exec.y + exec.h;
-      const x1 = tool.x + tool.w / 2;
-      const y1 = tool.y;
-      
-      // Curved connection from execute to tool
-      const d = `M ${x0},${y0} C ${x0},${y0 + 30} ${x1},${y1 - 30} ${x1},${y1}`;
-      list.push({ id: `et-${i}`, d, highlighted: true, dashed: false, index: pathNodes.length + i });
-    });
-    
     return list;
-  }, [pathNodes, positions, toolUniverse, toolCalls]);
+  }, [pathNodes, positions, toolUniverse, toolCalls, isLangSmithData, graphData]);
 
   // Calculate SVG dimensions
   const width = React.useMemo(() => {
+    if (isLangSmithData) {
+      return 950; // Fixed width for LangSmith layout
+    }
     const maxX = Math.max(
       ...Object.values(positions).map(p => p.x + p.w),
       pad
     );
     return maxX + pad;
-  }, [positions]);
+  }, [positions, isLangSmithData]);
 
   const height = React.useMemo(() => {
+    if (isLangSmithData) {
+      return 600; // Fixed height for LangSmith layout
+    }
     const maxY = Math.max(
       ...Object.values(positions).map(p => p.y + p.h),
       pad
     );
     return maxY + pad;
-  }, [positions]);
+  }, [positions, isLangSmithData]);
 
   return (
     <motion.div 
@@ -293,12 +448,13 @@ export default function AgentDecisionDAG({ toolCalls = [], allTools = [], langua
             title={n.title} 
             subtitle={n.subtitle} 
             type={n.type}
+            icon={n.icon}
             index={idx}
           />
         ))}
         
-        {/* Tool nodes */}
-        {toolUniverse.map((name, idx) => {
+        {/* Tool nodes - only for legacy format */}
+        {!isLangSmithData && toolUniverse.map((name, idx) => {
           const id = `tool:${name}`;
           const used = (toolCalls || []).some(tc => (tc?.name || tc?.tool_name) === name);
           return (
