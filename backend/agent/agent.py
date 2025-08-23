@@ -550,7 +550,11 @@ def execute_tool_node(state: AgentState):
                     xaxis_title="Date", 
                     yaxis_title="Prix de clôture (USD)",
                     xaxis=stella_theme['axis_config'],
-                    yaxis=stella_theme['axis_config']
+                    yaxis=stella_theme['axis_config'],
+                    legend=dict(
+                        bordercolor="rgba(0, 0, 0, 0)",  # Pas de bordure
+                        borderwidth=0
+                    )
                 )
                 
                 # On convertit en JSON et on met à jour l'état
@@ -592,7 +596,11 @@ def execute_tool_node(state: AgentState):
                 fig.update_layout(
                     template="plotly_white",
                     xaxis=stella_theme['axis_config'],
-                    yaxis=stella_theme['axis_config']
+                    yaxis=stella_theme['axis_config'],
+                    legend=dict(
+                        bordercolor="rgba(0, 0, 0, 0)",  # Pas de bordure
+                        borderwidth=0
+                    )
                 )
                 chart_json = pio.to_json(fig)
                 current_state_updates["plotly_json"] = chart_json
@@ -684,7 +692,7 @@ def generate_final_response_node(state: AgentState):
                 fig.add_trace(go.Scatter(
                     x=df['calendarYear'],
                     y=df['revenuePerShare_YoY_Growth'],
-                    name='Croissance du CA (%)',
+                    name='Croissance (%)',
                     mode='lines+markers', # On spécifie le mode ligne avec marqueurs
                     line=dict(color=stella_theme['colors'][1]), # On utilise 'line' pour la couleur
                     yaxis='y1'
@@ -694,7 +702,7 @@ def generate_final_response_node(state: AgentState):
                 fig.add_trace(go.Scatter(
                     x=df['calendarYear'],
                     y=df['earningsYield'],
-                    name='Rendement des Bénéfices (Valorisation)',
+                    name='Valorisation',
                     mode='lines+markers',
                     line=dict(color=stella_theme['colors'][0]), # Bleu Stella
                     yaxis='y2'
@@ -726,7 +734,7 @@ def generate_final_response_node(state: AgentState):
                     ),
                     yaxis2=dict(
                         title=dict(
-                            text='Rendement bénéficiaire (inverse du P/E)',
+                            text='Rendement bénéficiaire',
                             font=dict(color=stella_theme['colors'][0]) 
                         ),
                         tickfont=dict(color=stella_theme['colors'][0]),
@@ -741,9 +749,9 @@ def generate_final_response_node(state: AgentState):
                         yanchor="top",
                         y=1, # On aligne le haut de la légende avec le haut du graphique
                         xanchor="left",
-                        x=1.20, # On pousse la légende un peu plus à droite
-                        bordercolor="rgba(0, 0, 0, 0.2)", # Bordure légère
-                        borderwidth=1,
+                        x=1.40, # On pousse la légende un peu plus à droite
+                        bordercolor="rgba(0, 0, 0, 0)", # Pas de bordure
+                        borderwidth=0,
                         title_text="Légende"
                     )
                 )

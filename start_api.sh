@@ -29,13 +29,13 @@ source venv/bin/activate
 
 # Install/upgrade dependencies
 echo "📥 Installing dependencies..."
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 
-# Start the API server
+# Change to API directory and start the server
 echo "🌟 Starting Stella API server on http://localhost:8000"
 echo "📚 API Documentation will be available at http://localhost:8000/docs"
 echo "🏥 Health check available at http://localhost:8000/health"
 echo ""
 echo "Press Ctrl+C to stop the server"
 
-python api.py
+cd backend/api && python api.py

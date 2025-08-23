@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 # Add agent directory to Python path
-agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
 sys.path.insert(0, agent_dir)
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -27,7 +27,7 @@ from src.fetch_data import APILimitError
 
 # Change to the directory containing the agent and import
 original_dir = os.getcwd()
-agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
 os.chdir(agent_dir)
 
 # Import your existing agent from the current agent directory
@@ -200,7 +200,7 @@ async def get_animation_frames(session_id: str):
         
         # Change to agent directory for execution
         current_dir = os.getcwd()
-        agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
         os.chdir(agent_dir)
         
         try:
@@ -359,7 +359,7 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
     """
     # Change to agent directory for execution
     current_dir = os.getcwd()
-    agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+    agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
     os.chdir(agent_dir)
     
     try:
@@ -576,7 +576,7 @@ def _run_stella_agent(inputs: Dict[str, Any], config: Dict[str, Any]):
     """
     # Change to agent directory for execution
     current_dir = os.getcwd()
-    agent_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'agent')
+    agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
     os.chdir(agent_dir)
     
     try:

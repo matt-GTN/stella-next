@@ -2,10 +2,10 @@
 
 import { motion } from "motion/react";
 import PingingDot from "./PingingDot";
-import { 
-  Search, 
-  Download, 
-  BarChart3, 
+import {
+  Search,
+  Download,
+  BarChart3,
   TrendingUp,
   Database,
   Eye,
@@ -23,30 +23,30 @@ const getToolIcon = (toolName) => {
     // Outils de recherche et récupération
     'search_ticker': Search,
     'fetch_data': Download,
-    
+
     // Outils d'analyse et de traitement  
     'preprocess_data': Settings,
     'analyze_risks': TrendingUp,
     'compare_stocks': BarChart3,
-    
+
     // Outils d'affichage des données
     'display_raw_data': Database,
     'display_processed_data': Database,
     'display_price_chart': BarChart3,
     'create_dynamic_chart': BarChart3,
-    
+
     // Outils d'information
     'get_stock_news': Newspaper,
     'get_company_profile': Building2,
-    
+
     // Outils de calcul
     'calculate_financial_metrics': Calculator,
     'value_analysis': DollarSign,
-    
+
     // Défaut
     'default': Settings
   };
-  
+
   return iconMap[toolName] || iconMap.default;
 };
 
@@ -67,7 +67,7 @@ const getToolDescription = (toolName) => {
     'calculate_financial_metrics': 'Calcul des métriques financières',
     'value_analysis': 'Analyse de valorisation'
   };
-  
+
   return descriptions[toolName] || toolName;
 };
 
@@ -79,7 +79,7 @@ const renderArgPills = (args) => {
 
   const toText = (value) => {
     if (value == null) return '—';
-    if (typeof value === 'string') return value.length > 60 ? value.slice(0,57) + '…' : value;
+    if (typeof value === 'string') return value.length > 60 ? value.slice(0, 57) + '…' : value;
     if (Array.isArray(value)) return value.join(', ').slice(0, 60);
     if (typeof value === 'object') return JSON.stringify(value).slice(0, 60) + '…';
     return String(value);
@@ -128,7 +128,7 @@ export default function ToolCall({ toolName, args = {} }) {
             {renderArgPills(args)}
           </div>
         </div>
-        
+
         {/* Indicateur d'exécution */}
         <div className="flex flex-row items-center gap-3 justify-end flex-shrink-0">
           <div className="inline-grid *:[grid-area:1/1]">

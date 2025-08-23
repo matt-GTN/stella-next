@@ -99,7 +99,11 @@ def _create_dynamic_chart_logic(
             template="plotly_white", 
             font=dict(family="Arial, sans-serif"),
             xaxis=stella_theme['axis_config'],
-            yaxis=stella_theme['axis_config']
+            yaxis=stella_theme['axis_config'],
+            legend=dict(
+                bordercolor="rgba(0, 0, 0, 0)",  # Pas de bordure
+                borderwidth=0
+            )
         )
         return pio.to_json(fig)
 

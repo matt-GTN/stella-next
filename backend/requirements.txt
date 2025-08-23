@@ -1,6 +1,3 @@
-# --- Interface Web ---
-streamlit==1.46.0
-
 # --- API Framework ---
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
