@@ -1,72 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MessageCircle, ChevronDown } from "lucide-react";
+import { Home, ChevronDown, MessageCircle } from "lucide-react";
 import Link from "next/link";
-import { useLanguage } from "@/contexts/LanguageContext";
-import LanguageToggle from "@/components/LanguageToggle";
 
 export default function ChatNavbar() {
-  const { t } = useLanguage();
-  const [isVisible, setIsVisible] = useState(true);
-  const [isHovered, setIsHovered] = useState(false);
-  const timeoutRef = useRef(null);
-  const navbarRef = useRef(null);
-
-  // Hide navbar after 3 seconds of inactivity
-  useEffect(() => {
-    const resetTimer = () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      
-      setIsVisible(true);
-      
-      timeoutRef.current = setTimeout(() => {
-        if (!isHovered) {
-          setIsVisible(false);
-        }
-      }, 3000);
-    };
-
-    // Track scroll to show navbar
-    const handleScroll = () => {
-      resetTimer();
-    };
-
-    // Track key press to show navbar
-    const handleKeyPress = () => {
-      resetTimer();
-    };
-
-    // Initial timer
-    resetTimer();
-
-    // Add event listeners (removed mousemove to prevent navbar from appearing on any mouse movement)
-    document.addEventListener('scroll', handleScroll);
-    document.addEventListener('keydown', handleKeyPress);
-    document.addEventListener('click', resetTimer);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      document.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('keydown', handleKeyPress);
-      document.removeEventListener('click', resetTimer);
-    };
-  }, [isHovered]);
-
-  // Handle navbar hover
-  const handleNavbarMouseEnter = () => {
-    setIsHovered(true);
-    setIsVisible(true);
-  };
-
-  const handleNavbarMouseLeave = () => {
-    setIsHovered(false);
-  };
+  const [isVisible, setIsVisible] = useState(false); // Start hidden
 
   return (
     <>
@@ -74,19 +14,17 @@ export default function ChatNavbar() {
       <AnimatePresence>
         {isVisible && (
           <motion.nav
-            ref={navbarRef}
             initial={{ y: -80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -80, opacity: 0 }}
-            transition={{ duration: 0.4, type: "spring", stiffness: 300, damping: 30 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
             className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-4/5"
-            onMouseEnter={handleNavbarMouseEnter}
-            onMouseLeave={handleNavbarMouseLeave}
+            onMouseLeave={() => setIsVisible(false)}
           >
             <div className="bg-white/10 backdrop-blur-md border border-black/20 rounded-full px-6 py-3 shadow-lg">
               <div className="flex justify-between items-center">
                 {/* Logo et titre à gauche */}
-                <motion.div 
+                <motion.div
                   className="flex items-center space-x-3"
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
@@ -103,16 +41,7 @@ export default function ChatNavbar() {
 
                 {/* Navigation panels */}
                 <div className="flex items-center space-x-1">
-                  <Link href="/home">
-                    <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Accueil
-                    </motion.button>
-                  </Link>
-                  
+
                   <Link href="/">
                     <motion.button
                       className="px-4 py-2 rounded-full bg-white/20 text-black text-sm font-medium hover:bg-white/30 transition-all duration-200"
@@ -122,7 +51,7 @@ export default function ChatNavbar() {
                       Stella
                     </motion.button>
                   </Link>
-                  
+
                   <Link href="/modeling">
                     <motion.button
                       className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
@@ -132,17 +61,7 @@ export default function ChatNavbar() {
                       Modélisation
                     </motion.button>
                   </Link>
-                  
-                  <Link href="/agent-visualization">
-                    <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Visualisation
-                    </motion.button>
-                  </Link>
-                  
+
                   <Link href="/research-report">
                     <motion.button
                       className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
@@ -172,7 +91,11 @@ export default function ChatNavbar() {
           >
             <motion.div
               className="bg-purple-500/5 backdrop-blur-sm border border-black/10 rounded-b-xl px-8 py-2 shadow-sm cursor-pointer group"
-              whileHover={{ scale: 1.05, backgroundColor: "rgba(0,0,0,0.1)" }}
+              whileHover={{
+                scale: 1.05,
+                backgroundColor: "rgba(0,0,0,0.1)",
+                y: 2
+              }}
               transition={{ duration: 0.2 }}
             >
               <motion.div
