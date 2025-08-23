@@ -44,7 +44,7 @@ export default function ChatNavbar() {
 
                   <Link href="/">
                     <motion.button
-                      className="px-4 py-2 rounded-full bg-white/20 text-black text-sm font-medium hover:bg-white/30 transition-all duration-200"
+                      className="px-4 py-2 rounded-full bg-white/20 text-black text-sm font-medium hover:bg-purple-400/30 transition-all duration-200"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -54,7 +54,7 @@ export default function ChatNavbar() {
 
                   <Link href="/modeling">
                     <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-purple-400/30 transition-all duration-200"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -64,7 +64,7 @@ export default function ChatNavbar() {
 
                   <Link href="/research-report">
                     <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-white/10 hover:text-black transition-all duration-200"
+                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-purple-400/30 hover:text-black transition-all duration-200"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
