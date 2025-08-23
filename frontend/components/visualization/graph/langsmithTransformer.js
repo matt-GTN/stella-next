@@ -85,7 +85,22 @@ export function transformLangSmithData(langsmithData, currentStep = -1, language
  */
 function createLangSmithNodes(langsmithData, language = 'en') {
   const nodes = [];
-  const { execution_path, graph_structure, tool_calls } = langsmithData;
+  const { execution_path, graph_structure, tool_calls, thread_id } = langsmithData;
+
+  // All possible workflow nodes (complete graph structure)
+  const allPossibleNodes = [
+    '__start__',
+    'agent', 
+    'execute_tool',
+    'generate_final_response',
+    'prepare_chart_display',
+    'prepare_data_display', 
+    'prepare_news_display',
+    'prepare_profile_display',
+    'handle_error',
+    'cleanup_state',
+    '__end__'
+  ];
 
   // Node labels and icons
   const nodeConfig = {
@@ -146,74 +161,100 @@ function createLangSmithNodes(langsmithData, language = 'en') {
     }
   };
 
-  // Create nodes from execution path
+  // Create all possible nodes, marking which ones were executed
+  const executedNodes = new Set(execution_path || []);
+  // Always include start and end if there's an execution path
   if (execution_path && execution_path.length > 0) {
-    // Add start node
+    executedNodes.add('__start__');
+    executedNodes.add('__end__');
+  }
+
+  console.log('🎨 [LangSmith Transform] Executed nodes:', Array.from(executedNodes));
+  console.log('🎨 [LangSmith Transform] All possible nodes:', allPossibleNodes);
+
+  allPossibleNodes.forEach((nodeName, index) => {
+    const config = nodeConfig[nodeName] || {
+      icon: '🔧',
+      label: { fr: nodeName, en: nodeName },
+      type: 'unknown'
+    };
+
+    const isExecuted = executedNodes.has(nodeName);
+    console.log(`🎨 [LangSmith Transform] Node ${nodeName}: isExecuted=${isExecuted}`);
+    
+    // Add extra information for specific nodes
+    let extraInfo = null;
+    let subtitle = null;
+
+    if (nodeName === 'agent' && isExecuted) {
+      // Extract user query from thread_id or tool calls context
+      const firstToolCall = tool_calls?.[0];
+      if (firstToolCall?.arguments?.ticker) {
+        extraInfo = `Analyse ${firstToolCall.arguments.ticker}`;
+        subtitle = `Query: ${firstToolCall.arguments.ticker}`;
+      } else {
+        extraInfo = 'Analyse financière';
+        subtitle = 'Financial analysis';
+      }
+    } else if (nodeName === 'execute_tool' && isExecuted && tool_calls?.length > 0) {
+      // Show tool names and key arguments
+      const toolNames = tool_calls.map(tc => tc.name).join(', ');
+      const mainArg = tool_calls[0]?.arguments?.ticker || tool_calls[0]?.arguments?.symbol || '';
+      extraInfo = `${tool_calls.length} tools: ${toolNames}`;
+      subtitle = mainArg ? `Target: ${mainArg}` : `${tool_calls.length} tools`;
+    }
+
     nodes.push({
-      id: '__start__',
-      type: 'start',
-      label: nodeConfig['__start__'].label,
-      icon: nodeConfig['__start__'].icon,
-      isActive: true,
-      isExecuted: true,
+      id: nodeName,
+      type: config.type,
+      label: config.label,
+      icon: config.icon,
+      subtitle: subtitle,
+      extraInfo: extraInfo,
+      executionOrder: isExecuted ? (execution_path?.indexOf(nodeName) + 1 || 0) : null,
+      isActive: isExecuted,
+      isExecuted: isExecuted,
       isExecuting: false,
+      isUnused: !isExecuted,
       position: { x: 0, y: 0 }
     });
+  });
 
-    // Add nodes from execution path
-    execution_path.forEach((nodeName, index) => {
-      const config = nodeConfig[nodeName] || {
-        icon: '🔧',
-        label: { fr: nodeName, en: nodeName },
-        type: 'unknown'
-      };
+  // Add detached info nodes for agent and execute_tool if they were executed
+  const agentNode = nodes.find(n => n.id === 'agent' && n.isExecuted);
+  const executeToolNode = nodes.find(n => n.id === 'execute_tool' && n.isExecuted);
 
-      nodes.push({
-        id: nodeName,
-        type: config.type,
-        label: config.label,
-        icon: config.icon,
-        executionOrder: index + 1,
-        isActive: true,
-        isExecuted: true,
-        isExecuting: false,
-        position: { x: 0, y: 0 }
-      });
-    });
-
-    // Add end node
+  if (agentNode && agentNode.subtitle) {
     nodes.push({
-      id: '__end__',
-      type: 'end',
-      label: nodeConfig['__end__'].label,
-      icon: nodeConfig['__end__'].icon,
+      id: 'agent_query_detail',
+      type: 'info_detail',
+      label: { fr: 'Requête Utilisateur', en: 'User Query' },
+      icon: '💬',
+      subtitle: agentNode.subtitle,
+      extraInfo: agentNode.extraInfo,
       isActive: true,
       isExecuted: true,
       isExecuting: false,
+      isDetailNode: true,
+      parentNode: 'agent',
       position: { x: 0, y: 0 }
     });
   }
 
-  // Add tool detail nodes if we have tool calls
-  if (tool_calls && tool_calls.length > 0) {
-    tool_calls.forEach((toolCall, index) => {
-      const toolName = toolCall.name;
-      const toolConfig = getToolConfig(toolName);
-      
-      nodes.push({
-        id: `tool_${toolName}_${index}`,
-        type: 'tool_detail',
-        toolName: toolName,
-        label: toolConfig.label,
-        icon: toolConfig.icon,
-        description: toolConfig.description,
-        executionOrder: index + 1,
-        isActive: true,
-        isExecuted: true,
-        isExecuting: false,
-        position: { x: 0, y: 0 },
-        parentNode: 'execute_tool'
-      });
+  if (executeToolNode && executeToolNode.subtitle) {
+    nodes.push({
+      id: 'execute_tool_detail',
+      type: 'info_detail',
+      label: { fr: 'Outils Exécutés', en: 'Executed Tools' },
+      icon: '🛠️',
+      subtitle: executeToolNode.subtitle,
+      extraInfo: executeToolNode.extraInfo,
+      isActive: true,
+      isExecuted: true,
+      isExecuting: false,
+      isDetailNode: true,
+      parentNode: 'execute_tool',
+      position: { x: 0, y: 0 }
     });
   }
 
@@ -221,40 +262,109 @@ function createLangSmithNodes(langsmithData, language = 'en') {
 }
 
 /**
- * Create edges based on LangSmith execution path
+ * Create edges based on LangSmith execution path and complete workflow structure
  */
 function createLangSmithEdges(langsmithData, nodes) {
   const edges = [];
   const { execution_path } = langsmithData;
+  
+  // Define the complete workflow structure with all possible paths
+  const workflowStructure = [
+    { from: '__start__', to: 'agent', condition: 'workflow_start' },
+    { from: 'agent', to: 'execute_tool', condition: 'tools_needed' },
+    { from: 'agent', to: 'generate_final_response', condition: 'no_tools_needed' },
+    { from: 'execute_tool', to: 'generate_final_response', condition: 'generate_response' },
+    { from: 'execute_tool', to: 'prepare_chart_display', condition: 'chart_needed' },
+    { from: 'execute_tool', to: 'prepare_data_display', condition: 'data_display_needed' },
+    { from: 'execute_tool', to: 'prepare_news_display', condition: 'news_needed' },
+    { from: 'execute_tool', to: 'prepare_profile_display', condition: 'profile_needed' },
+    { from: 'execute_tool', to: 'handle_error', condition: 'error_occurred' },
+    { from: 'generate_final_response', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'prepare_chart_display', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'prepare_data_display', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'prepare_news_display', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'prepare_profile_display', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'handle_error', to: 'cleanup_state', condition: 'cleanup_required' },
+    { from: 'cleanup_state', to: '__end__', condition: 'workflow_complete' }
+  ];
 
-  if (!execution_path || execution_path.length === 0) {
-    return edges;
+  // Create edges based on workflow structure
+  workflowStructure.forEach((edgeSpec, index) => {
+    const fromNode = nodes.find(n => n.id === edgeSpec.from);
+    const toNode = nodes.find(n => n.id === edgeSpec.to);
+    
+    if (!fromNode || !toNode) return;
+
+    // Determine if this edge was actually used in execution
+    let isExecuted = false;
+    let isActive = false;
+
+    if (execution_path && execution_path.length > 0) {
+      // Check if this is part of the actual execution path
+      const fromIndex = execution_path.indexOf(edgeSpec.from);
+      const toIndex = execution_path.indexOf(edgeSpec.to);
+      
+      // Edge is executed if both nodes are in execution path and connected
+      if (fromIndex >= 0 && toIndex >= 0 && toIndex === fromIndex + 1) {
+        isExecuted = true;
+        isActive = true;
+      }
+      // Special case for start -> first node and last node -> end
+      else if (edgeSpec.from === '__start__' && execution_path[0] === edgeSpec.to) {
+        isExecuted = true;
+        isActive = true;
+      }
+      else if (edgeSpec.to === '__end__' && execution_path[execution_path.length - 1] === edgeSpec.from) {
+        isExecuted = true;
+        isActive = true;
+      }
+      // Don't mark edges as active just because the from node was executed
+      // Only mark as active if it's actually part of the execution path
+    }
+
+    console.log(`🎨 [LangSmith Transform] Edge ${edgeSpec.from}->${edgeSpec.to}: isExecuted=${isExecuted}, isActive=${isActive}`);
+
+    edges.push({
+      id: `${edgeSpec.from}-${edgeSpec.to}`,
+      from: edgeSpec.from,
+      to: edgeSpec.to,
+      condition: edgeSpec.condition,
+      isActive: isActive,
+      isExecuted: isExecuted,
+      isUnused: !isActive,
+      index
+    });
+  });
+
+  // Add edges for detail nodes
+  const hasAgentDetail = nodes.some(n => n.id === 'agent_query_detail');
+  const hasExecuteToolDetail = nodes.some(n => n.id === 'execute_tool_detail');
+
+  if (hasAgentDetail) {
+    edges.push({
+      id: 'agent-agent_query_detail',
+      from: 'agent',
+      to: 'agent_query_detail',
+      condition: 'detail_connection',
+      isActive: true,
+      isExecuted: true,
+      isDetailEdge: true,
+      index: edges.length
+    });
   }
 
-  // Create linear path from start through execution path to end
-  let previousNode = '__start__';
-
-  execution_path.forEach((nodeName, index) => {
+  if (hasExecuteToolDetail) {
     edges.push({
-      id: `${previousNode}-${nodeName}`,
-      from: previousNode,
-      to: nodeName,
-      condition: `step_${index + 1}`,
+      id: 'execute_tool-execute_tool_detail',
+      from: 'execute_tool',
+      to: 'execute_tool_detail',
+      condition: 'detail_connection',
       isActive: true,
-      isExecuted: true
+      isExecuted: true,
+      isDetailEdge: true,
+      index: edges.length
     });
-    previousNode = nodeName;
-  });
-
-  // Connect last node to end
-  edges.push({
-    id: `${previousNode}-__end__`,
-    from: previousNode,
-    to: '__end__',
-    condition: 'workflow_complete',
-    isActive: true,
-    isExecuted: true
-  });
+  }
 
   return edges;
 }

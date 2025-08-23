@@ -33,31 +33,28 @@ function useToolUniverse(toolCalls, allTools) {
   }, [toolCalls, allTools]);
 }
 
-function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "default", index = 0, icon = null }) {
-  // Different colors and styles based on node type
+function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "default", index = 0, icon = null, isUnused = false, extraInfo = null }) {
+  // Different colors and styles based on node type and usage
   const getNodeStyle = () => {
-    switch(type) {
-      case 'start':
-        return { fill: "#f0fdf4", stroke: "#22c55e", textColor: "#14532d" };
-      case 'agent':
-        return { fill: "#fef3c7", stroke: "#f59e0b", textColor: "#78350f" };
-      case 'execute':
-      case 'tool_execution':
-        return { fill: "#fce7f3", stroke: "#ec4899", textColor: "#831843" };
-      case 'final':
-      case 'preparation':
-        return { fill: "#ede9fe", stroke: "#8b5cf6", textColor: "#4c1d95" };
-      case 'end':
-        return { fill: "#f1f5f9", stroke: "#64748b", textColor: "#334155" };
-      case 'error':
-        return { fill: "#fef2f2", stroke: "#ef4444", textColor: "#7f1d1d" };
-      case 'tool-used':
-        return { fill: "#dcfce7", stroke: "#4ade80", textColor: "#14532d" };
-      case 'tool-unused':
-        return { fill: "#f3f4f6", stroke: "#d1d5db", textColor: "#6b7280" };
-      default:
-        return { fill: "#ffffff", stroke: highlighted ? "#a855f7" : "#E5E7EB", textColor: "#111827" };
+    // If node is unused, apply gray styling
+    if (isUnused) {
+      return { 
+        fill: "#6b7280", // gray-500
+        stroke: "#9ca3af", // gray-400
+        textColor: "#ffffff",
+        opacity: 1,
+        strokeDasharray: "none"
+      };
     }
+
+    // Executed nodes get lighter purple styling (purple-400)
+    return { 
+      fill: "#a855f7", // purple-500
+      stroke: "#c084fc", // purple-400
+      textColor: "#ffffff",
+      opacity: 1,
+      strokeDasharray: "none"
+    };
   };
 
   const style = getNodeStyle();
@@ -79,16 +76,18 @@ function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "defaul
         rx={16} 
         ry={16} 
         width={w} 
-        height={h} 
+        height={extraInfo ? h + 20 : h} 
         fill={style.fill}
         stroke={style.stroke} 
         strokeWidth={2}
+        strokeDasharray={style.strokeDasharray || "none"}
+        opacity={style.opacity || 1}
         whileHover={{ strokeWidth: 3 }}
         transition={{ duration: 0.2 }}
       />
       {/* Icon */}
       {icon && (
-        <text x={x + w/2} y={y + 25} fontSize={16} textAnchor="middle">
+        <text x={x + w/2} y={y + 25} fontSize={16} textAnchor="middle" opacity={isUnused ? 0.5 : 1}>
           {icon}
         </text>
       )}
@@ -99,24 +98,58 @@ function Node({ x, y, w, h, title, subtitle, highlighted = false, type = "defaul
       </text>
       
       {/* Subtitle */}
-      {subtitle && !icon ? (
-        <text x={x + w/2} y={y + 52} fontSize={11} fill={style.textColor} opacity="0.7" textAnchor="middle">
-          {subtitle.length > 20 ? subtitle.substring(0, 20) + "..." : subtitle}
+      {subtitle && (
+        <text x={x + w/2} y={icon ? y + 60 : y + 48} fontSize={10} fill={style.textColor} opacity="0.7" textAnchor="middle">
+          {subtitle.length > 22 ? subtitle.substring(0, 22) + "..." : subtitle}
         </text>
-      ) : null}
+      )}
+
+      {/* Extra Info */}
+      {extraInfo && (
+        <text x={x + w/2} y={y + (subtitle ? 75 : icon ? 75 : 65)} fontSize={9} fill={style.textColor} opacity="0.6" textAnchor="middle">
+          {extraInfo.length > 25 ? extraInfo.substring(0, 25) + "..." : extraInfo}
+        </text>
+      )}
     </motion.g>
   );
 }
 
-function Edge({ d, highlighted = false, dashed = false, index = 0 }) {
+function Edge({ d, highlighted = false, dashed = false, index = 0, isUnused = false, isExecuted = false }) {
+  const getEdgeStyle = () => {
+    if (isUnused) {
+      return {
+        stroke: "#6b7280", // gray-500
+        strokeOpacity: 1,
+        strokeWidth: 2,
+        strokeDasharray: "none"
+      };
+    } else if (isExecuted) {
+      return {
+        stroke: "#c084fc", // purple-400
+        strokeOpacity: 1,
+        strokeWidth: 3,
+        strokeDasharray: "none"
+      };
+    } else {
+      return {
+        stroke: "#9ca3af", // gray-400
+        strokeOpacity: 0.7,
+        strokeWidth: 2,
+        strokeDasharray: "none"
+      };
+    }
+  };
+
+  const style = getEdgeStyle();
+
   return (
     <motion.path
       d={d}
       fill="none"
-      stroke={highlighted ? "#8b5cf6" : "#cbd5e1"}
-      strokeOpacity={highlighted ? 1 : 0.5}
-      strokeWidth={highlighted ? 2.5 : 1.5}
-      strokeDasharray={dashed ? "5,5" : "none"}
+      stroke={style.stroke}
+      strokeOpacity={style.strokeOpacity}
+      strokeWidth={style.strokeWidth}
+      strokeDasharray={style.strokeDasharray}
       initial={{ pathLength: 0, opacity: 0 }}
       animate={{ pathLength: 1, opacity: 1 }}
       transition={{ 
@@ -181,7 +214,8 @@ export default function AgentDecisionDAG({
           icon: node.icon,
           isActive: node.isActive,
           isExecuted: node.isExecuted,
-          isExecuting: node.isExecuting
+          isExecuting: node.isExecuting,
+          isUnused: node.isUnused
         }));
     } else {
       // Legacy format
@@ -211,19 +245,21 @@ export default function AgentDecisionDAG({
       // Define specific positions for LangSmith workflow nodes
       const nodePositions = {
         '__start__': { x: centerX - nodeW/2, y: 20 },
-        'agent': { x: centerX - nodeW/2, y: 120 },
-        'execute_tool': { x: centerX - nodeW/2, y: 220 },
+        'agent': { x: centerX - nodeW/2, y: 130 },
+        'agent_query_detail': { x: centerX + nodeW + 40, y: 130 }, // À droite de l'agent
+        'execute_tool': { x: centerX - nodeW/2, y: 260 },
+        'execute_tool_detail': { x: centerX + nodeW + 40, y: 260 }, // À droite d'execute_tool
         
-        // Preparation nodes in a row
-        'generate_final_response': { x: 50, y: 320 },
-        'handle_error': { x: 200, y: 320 },
-        'prepare_chart_display': { x: 350, y: 320 },
-        'prepare_data_display': { x: 500, y: 320 },
-        'prepare_news_display': { x: 650, y: 320 },
-        'prepare_profile_display': { x: 800, y: 320 },
+        // Preparation nodes in a row (wider spacing for better visibility)
+        'generate_final_response': { x: 30, y: 390 },
+        'handle_error': { x: 180, y: 390 },
+        'prepare_chart_display': { x: 330, y: 390 },
+        'prepare_data_display': { x: 480, y: 390 },
+        'prepare_news_display': { x: 630, y: 390 },
+        'prepare_profile_display': { x: 780, y: 390 },
         
-        'cleanup_state': { x: centerX - nodeW/2, y: 420 },
-        '__end__': { x: centerX - nodeW/2, y: 520 }
+        'cleanup_state': { x: centerX - nodeW/2, y: 520 },
+        '__end__': { x: centerX - nodeW/2, y: 630 }
       };
       
       // Apply positions to all nodes
@@ -303,25 +339,39 @@ export default function AgentDecisionDAG({
         // Smart edge routing based on node positions
         let d;
         
-        // Check if it's a vertical connection (same X or close)
-        const isVertical = Math.abs((fromPos.x + fromPos.w/2) - (toPos.x + toPos.w/2)) < 50;
+        // Check if it's a detail edge (horizontal connection to detail node)
+        const isDetailEdge = edge.isDetailEdge;
         
-        if (isVertical) {
-          // Vertical connection (straight down)
-          const x = fromPos.x + fromPos.w / 2;
-          const y0 = fromPos.y + fromPos.h;
-          const y1 = toPos.y;
-          d = `M ${x},${y0} L ${x},${y1}`;
-        } else {
-          // Branching connection (from execute_tool to preparation nodes)
-          const x0 = fromPos.x + fromPos.w / 2;
-          const y0 = fromPos.y + fromPos.h;
-          const x1 = toPos.x + toPos.w / 2;
-          const y1 = toPos.y;
+        if (isDetailEdge) {
+          // Horizontal connection to detail node
+          const x0 = fromPos.x + fromPos.w;
+          const y0 = fromPos.y + fromPos.h / 2;
+          const x1 = toPos.x;
+          const y1 = toPos.y + toPos.h / 2;
           
-          // Create a curved path that goes down then across
-          const midY = y0 + (y1 - y0) * 0.3;
-          d = `M ${x0},${y0} L ${x0},${midY} L ${x1},${midY} L ${x1},${y1}`;
+          // Simple horizontal line
+          d = `M ${x0},${y0} L ${x1},${y1}`;
+        } else {
+          // Check if it's a vertical connection (same X or close)
+          const isVertical = Math.abs((fromPos.x + fromPos.w/2) - (toPos.x + toPos.w/2)) < 50;
+          
+          if (isVertical) {
+            // Vertical connection (straight down)
+            const x = fromPos.x + fromPos.w / 2;
+            const y0 = fromPos.y + fromPos.h;
+            const y1 = toPos.y;
+            d = `M ${x},${y0} L ${x},${y1}`;
+          } else {
+            // Branching connection (from execute_tool to preparation nodes)
+            const x0 = fromPos.x + fromPos.w / 2;
+            const y0 = fromPos.y + fromPos.h;
+            const x1 = toPos.x + toPos.w / 2;
+            const y1 = toPos.y;
+            
+            // Create a curved path that goes down then across
+            const midY = y0 + (y1 - y0) * 0.3;
+            d = `M ${x0},${y0} L ${x0},${midY} L ${x1},${midY} L ${x1},${y1}`;
+          }
         }
         
         list.push({ 
@@ -377,7 +427,7 @@ export default function AgentDecisionDAG({
   // Calculate SVG dimensions
   const width = React.useMemo(() => {
     if (isLangSmithData) {
-      return 950; // Fixed width for LangSmith layout
+      return 1100; // Increased width for detail nodes
     }
     const maxX = Math.max(
       ...Object.values(positions).map(p => p.x + p.w),
@@ -388,7 +438,7 @@ export default function AgentDecisionDAG({
 
   const height = React.useMemo(() => {
     if (isLangSmithData) {
-      return 600; // Fixed height for LangSmith layout
+      return 720; // Increased height for LangSmith layout with extra info
     }
     const maxY = Math.max(
       ...Object.values(positions).map(p => p.y + p.h),
@@ -418,10 +468,13 @@ export default function AgentDecisionDAG({
           
           {/* Arrow markers */}
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <path d="M 0 0 L 8 3 L 0 6 z" fill="#cbd5e1" />
+            <path d="M 0 0 L 8 3 L 0 6 z" fill="#6b7280" />
           </marker>
           <marker id="arrow-hi" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-            <path d="M 0 0 L 8 3 L 0 6 z" fill="url(#grad-purple)" />
+            <path d="M 0 0 L 8 3 L 0 6 z" fill="#4b5563" />
+          </marker>
+          <marker id="arrow-executed" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <path d="M 0 0 L 8 3 L 0 6 z" fill="#c084fc" />
           </marker>
         </defs>
 
@@ -432,8 +485,10 @@ export default function AgentDecisionDAG({
             d={e.d} 
             highlighted={e.highlighted} 
             dashed={e.dashed}
+            isUnused={e.isUnused}
+            isExecuted={e.isExecuted}
             index={e.index || i}
-            markerEnd={e.highlighted ? "url(#arrow-hi)" : "url(#arrow)"} 
+            markerEnd={e.isExecuted ? "url(#arrow-executed)" : e.highlighted ? "url(#arrow-hi)" : "url(#arrow)"} 
           />
         ))}
 
@@ -449,6 +504,8 @@ export default function AgentDecisionDAG({
             subtitle={n.subtitle} 
             type={n.type}
             icon={n.icon}
+            isUnused={n.isUnused}
+            extraInfo={n.extraInfo}
             index={idx}
           />
         ))}
@@ -471,6 +528,26 @@ export default function AgentDecisionDAG({
             />
           );
         })}
+
+        {/* Legend for LangSmith data */}
+        {isLangSmithData && (
+          <g transform="translate(20, 20)">
+            <rect x="0" y="0" width="200" height="80" fill="white" stroke="#e5e7eb" strokeWidth="1" rx="8" opacity="0.9" />
+            <text x="10" y="20" fontSize="12" fontWeight="600" fill="#374151">Légende:</text>
+            
+            {/* Executed path */}
+            <line x1="10" y1="35" x2="25" y2="35" stroke="#c084fc" strokeWidth="3" />
+            <text x="30" y="39" fontSize="10" fill="#374151">Chemin exécuté</text>
+            
+            {/* Unused path */}
+            <line x1="10" y1="50" x2="25" y2="50" stroke="#6b7280" strokeWidth="2" />
+            <text x="30" y="54" fontSize="10" fill="#374151">Chemin non utilisé</text>
+            
+            {/* Detail connection */}
+            <line x1="10" y1="65" x2="25" y2="65" stroke="#c084fc" strokeWidth="2" />
+            <text x="30" y="69" fontSize="10" fill="#374151">Connexion détail</text>
+          </g>
+        )}
       </svg>
     </motion.div>
   );
