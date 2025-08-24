@@ -128,12 +128,22 @@ Modern React/Next.js 15 application with:
 
 ### Required Environment Variables
 
-**Backend (.env):**
+**Centralized Configuration (backend/.env):**
+All environment variables are managed in `backend/.env` for consistency:
 ```env
-GROQ_API_KEY=your_groq_api_key_here
-LANGSMITH_API_KEY=your_langsmith_api_key_here  
-LANGSMITH_PROJECT=stella
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+FMP_API_KEY=your_fmp_api_key_here
+NEWS_API_KEY=your_news_api_key_here
+LANGSMITH_API_KEY=your_langsmith_api_key_here
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_PROJECT=stella-next
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
 ```
+
+**Setup:**
+1. Copy `backend/.env.example` to `backend/.env`
+2. Update with your API keys
+3. Both `./start_api.sh` and backend components use `backend/.env`
 
 **Frontend:**
 - No environment variables required for basic functionality

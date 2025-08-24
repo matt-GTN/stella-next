@@ -27,5 +27,16 @@ export {
   getLangSmithGraphData
 } from './langsmithTransformer';
 
+// Content extraction utilities
+export {
+  extractUserQuery,
+  extractToolSummary,
+  extractNodeContent,
+  truncateText,
+  createTruncatedContent,
+  safeContentExtraction,
+  formatToolName
+} from './contentExtractor';
+
 // Re-export the main component as default
 export { default } from './AgentDecisionDAG';

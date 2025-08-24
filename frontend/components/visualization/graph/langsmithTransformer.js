@@ -181,42 +181,21 @@ function createLangSmithNodes(langsmithData, language = 'en') {
 
     const isExecuted = executedNodes.has(nodeName);
     console.log(`🎨 [LangSmith Transform] Node ${nodeName}: isExecuted=${isExecuted}`);
-    
-    // Add extra information for specific nodes
-    let extraInfo = null;
-    let subtitle = null;
-
-    if (nodeName === 'agent' && isExecuted) {
-      // Extract user query from thread_id or tool calls context
-      const firstToolCall = tool_calls?.[0];
-      if (firstToolCall?.arguments?.ticker) {
-        extraInfo = `Analyse ${firstToolCall.arguments.ticker}`;
-        subtitle = `Query: ${firstToolCall.arguments.ticker}`;
-      } else {
-        extraInfo = 'Analyse financière';
-        subtitle = 'Financial analysis';
-      }
-    } else if (nodeName === 'execute_tool' && isExecuted && tool_calls?.length > 0) {
-      // Show tool names and key arguments
-      const toolNames = tool_calls.map(tc => tc.name).join(', ');
-      const mainArg = tool_calls[0]?.arguments?.ticker || tool_calls[0]?.arguments?.symbol || '';
-      extraInfo = `${tool_calls.length} tools: ${toolNames}`;
-      subtitle = mainArg ? `Target: ${mainArg}` : `${tool_calls.length} tools`;
-    }
 
     nodes.push({
       id: nodeName,
       type: config.type,
       label: config.label,
       icon: config.icon,
-      subtitle: subtitle,
-      extraInfo: extraInfo,
       executionOrder: isExecuted ? (execution_path?.indexOf(nodeName) + 1 || 0) : null,
       isActive: isExecuted,
       isExecuted: isExecuted,
       isExecuting: false,
       isUnused: !isExecuted,
-      position: { x: 0, y: 0 }
+      position: { x: 0, y: 0 },
+      // Store raw data for content extraction
+      rawToolCalls: tool_calls,
+      rawThreadId: thread_id
     });
   });
 
@@ -224,37 +203,37 @@ function createLangSmithNodes(langsmithData, language = 'en') {
   const agentNode = nodes.find(n => n.id === 'agent' && n.isExecuted);
   const executeToolNode = nodes.find(n => n.id === 'execute_tool' && n.isExecuted);
 
-  if (agentNode && agentNode.subtitle) {
+  if (agentNode) {
     nodes.push({
       id: 'agent_query_detail',
       type: 'info_detail',
       label: { fr: 'Requête Utilisateur', en: 'User Query' },
       icon: '💬',
-      subtitle: agentNode.subtitle,
-      extraInfo: agentNode.extraInfo,
       isActive: true,
       isExecuted: true,
       isExecuting: false,
       isDetailNode: true,
       parentNode: 'agent',
-      position: { x: 0, y: 0 }
+      position: { x: 0, y: 0 },
+      rawToolCalls: tool_calls,
+      rawThreadId: thread_id
     });
   }
 
-  if (executeToolNode && executeToolNode.subtitle) {
+  if (executeToolNode) {
     nodes.push({
       id: 'execute_tool_detail',
       type: 'info_detail',
       label: { fr: 'Outils Exécutés', en: 'Executed Tools' },
       icon: '🛠️',
-      subtitle: executeToolNode.subtitle,
-      extraInfo: executeToolNode.extraInfo,
       isActive: true,
       isExecuted: true,
       isExecuting: false,
       isDetailNode: true,
       parentNode: 'execute_tool',
-      position: { x: 0, y: 0 }
+      position: { x: 0, y: 0 },
+      rawToolCalls: tool_calls,
+      rawThreadId: thread_id
     });
   }
 
