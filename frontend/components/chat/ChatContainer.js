@@ -47,7 +47,7 @@ export default function ChatContainer({ messages, onSendMessage, isLoading }) {
               layout={false}
               style={{ willChange: "opacity, transform" }}
             >
-              <ChatMessage message={message} />
+              <ChatMessage message={message} messageIndex={index} />
             </motion.div>
           ))}
         </AnimatePresence>

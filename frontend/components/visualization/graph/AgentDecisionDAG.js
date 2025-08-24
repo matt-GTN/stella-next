@@ -305,20 +305,43 @@ export default function AgentDecisionDAG({
   // Determine if we're using new graphData format or legacy format
   const isLangSmithData = graphData && graphData.nodes && graphData.edges;
 
-  console.log('🎨 [AgentDecisionDAG] Rendering with:', {
-    isLangSmithData,
-    graphDataNodes: graphData?.nodes?.length || 0,
-    graphDataEdges: graphData?.edges?.length || 0,
-    legacyToolCalls: toolCalls?.length || 0,
-    graphData: graphData
-  });
-
-  // Add error boundary logging
+  // Only log on initial mount and when key props change
   React.useEffect(() => {
-    console.log('🎨 [AgentDecisionDAG] Component mounted/updated');
-  });
+    console.log('🎨 [AgentDecisionDAG] Rendering with:', {
+      isLangSmithData,
+      graphDataNodes: graphData?.nodes?.length || 0,
+      graphDataEdges: graphData?.edges?.length || 0,
+      legacyToolCalls: toolCalls?.length || 0
+    });
+  }, [isLangSmithData, graphData?.nodes?.length, graphData?.edges?.length, toolCalls?.length]);
 
   const toolUniverse = useToolUniverse(toolCalls, allTools);
+
+  // Enhanced layout configuration - stable object to prevent re-renders
+  const layoutConfig = React.useMemo(() => ({
+    // Base dimensions
+    nodeWidth: 160,
+    nodeHeight: 70,
+    padding: 40,
+
+    // Horizontal spacing improvements (Requirement 3.1)
+    minHorizontalSpacing: 200, // Minimum space between nodes
+    preparationLayerSpacing: 180, // Specific spacing for preparation layer
+    detailNodeOffset: 60, // Offset for detail nodes from parent
+
+    // Vertical spacing improvements (Requirement 3.2)
+    minVerticalSpacing: 120, // Minimum space between workflow layers
+    layerVerticalSpacing: 130, // Standard vertical spacing between layers
+    toolRowOffset: 140, // Offset for tool row from main flow
+
+    // Dynamic spacing adjustments (Requirement 3.4)
+    contentLengthFactor: 0.8, // Factor for adjusting spacing based on content length
+    maxContentAdjustment: 40, // Maximum additional spacing for long content
+
+    // Legacy layout positions
+    mainFlowY: 80,
+    toolRowY: 220
+  }), []);
 
   // Helper functions for improved spacing calculations
   const calculateContentBasedSpacing = React.useCallback((content) => {
@@ -336,7 +359,7 @@ export default function AgentDecisionDAG({
     );
 
     return adjustment;
-  }, []);
+  }, [layoutConfig]);
 
   const calculateHorizontalSpacing = React.useCallback((nodes, isPreparationLayer = false) => {
     if (!nodes || nodes.length <= 1) return layoutConfig.minHorizontalSpacing;
@@ -352,7 +375,7 @@ export default function AgentDecisionDAG({
     }, 0) / nodes.length;
 
     return baseSpacing + avgContentAdjustment;
-  }, [calculateContentBasedSpacing]);
+  }, [layoutConfig, calculateContentBasedSpacing]);
 
   const calculateVerticalSpacing = React.useCallback((fromLayer, toLayer) => {
     // Dynamic vertical spacing between workflow layers (Requirement 3.2)
@@ -376,7 +399,7 @@ export default function AgentDecisionDAG({
     }
 
     return baseSpacing;
-  }, []);
+  }, [layoutConfig]);
 
   const calculateDetailNodePosition = React.useCallback((parentPos, detailIndex = 0) => {
     // Detail node positioning system with proper offsets (Requirement 3.3)
@@ -386,33 +409,7 @@ export default function AgentDecisionDAG({
       w: layoutConfig.nodeWidth,
       h: layoutConfig.nodeHeight
     };
-  }, []);
-
-  // Enhanced layout configuration with improved spacing calculations
-  const layoutConfig = {
-    // Base dimensions
-    nodeWidth: 160,
-    nodeHeight: 70,
-    padding: 40,
-
-    // Horizontal spacing improvements (Requirement 3.1)
-    minHorizontalSpacing: 200, // Minimum space between nodes
-    preparationLayerSpacing: 180, // Specific spacing for preparation layer
-    detailNodeOffset: 60, // Offset for detail nodes from parent
-
-    // Vertical spacing improvements (Requirement 3.2)
-    minVerticalSpacing: 120, // Minimum space between workflow layers
-    layerVerticalSpacing: 130, // Standard vertical spacing between layers
-    toolRowOffset: 140, // Offset for tool row from main flow
-
-    // Dynamic spacing adjustments (Requirement 3.4)
-    contentLengthFactor: 0.8, // Factor for adjusting spacing based on content length
-    maxContentAdjustment: 40, // Maximum additional spacing for long content
-
-    // Legacy layout positions
-    mainFlowY: 80,
-    toolRowY: 220
-  };
+  }, [layoutConfig]);
 
   // Build path nodes: either from graphData or legacy format
   const pathNodes = React.useMemo(() => {
@@ -514,10 +511,12 @@ export default function AgentDecisionDAG({
     }
   }, [graphData, toolCalls, language, isLangSmithData]);
 
-  // Debug pathNodes
+  // Debug pathNodes - only log when pathNodes actually change
   React.useEffect(() => {
-    console.log('🎨 [AgentDecisionDAG] PathNodes created:', pathNodes);
-  }, [pathNodes]);
+    if (pathNodes.length > 0) {
+      console.log('🎨 [AgentDecisionDAG] PathNodes created:', pathNodes.map(n => n.id));
+    }
+  }, [pathNodes.length]);
 
   // Compute positions with enhanced spacing calculations
   const positions = React.useMemo(() => {
@@ -638,9 +637,7 @@ export default function AgentDecisionDAG({
 
           pos[detailNode.id] = calculateDetailNodePosition(parentPos, detailIndex);
 
-          console.log(`🎨 [Detail Node] Positioned ${detailNode.id} relative to parent ${parentId}:`, pos[detailNode.id]);
-        } else {
-          console.warn(`🎨 [Detail Node] Parent ${parentId} not found for detail node ${detailNode.id}`);
+          // Detail node positioned successfully
         }
       });
 
@@ -689,8 +686,6 @@ export default function AgentDecisionDAG({
       }
     }
 
-    console.log('🎨 [AgentDecisionDAG] Enhanced positions computed:', pos);
-    console.log('🎨 [AgentDecisionDAG] PathNodes for positions:', pathNodes.map(n => n.id));
     return pos;
   }, [pathNodes, toolUniverse, isLangSmithData, calculateHorizontalSpacing, calculateVerticalSpacing, calculateContentBasedSpacing, calculateDetailNodePosition]);
 
@@ -939,24 +934,21 @@ export default function AgentDecisionDAG({
         ))}
 
         {/* Main flow nodes */}
-        {pathNodes.map((n, idx) => {
-          console.log('🎨 [AgentDecisionDAG] Rendering node:', n.id, positions[n.id], n.content);
-          return (
-            <Node
-              key={n.id}
-              x={positions[n.id]?.x || 0}
-              y={positions[n.id]?.y || 0}
-              w={positions[n.id]?.w || 160}
-              h={positions[n.id]?.h || 70}
-              content={n.content}
-              type={n.type}
-              icon={n.icon}
-              isUnused={n.isUnused}
-              index={idx}
-              node={n} // Pass full node object for icon prioritization
-            />
-          );
-        })}
+        {pathNodes.map((n, idx) => (
+          <Node
+            key={n.id}
+            x={positions[n.id]?.x || 0}
+            y={positions[n.id]?.y || 0}
+            w={positions[n.id]?.w || 160}
+            h={positions[n.id]?.h || 70}
+            content={n.content}
+            type={n.type}
+            icon={n.icon}
+            isUnused={n.isUnused}
+            index={idx}
+            node={n} // Pass full node object for icon prioritization
+          />
+        ))}
 
         {/* Tool nodes - only for legacy format */}
         {!isLangSmithData && toolUniverse.map((name, idx) => {

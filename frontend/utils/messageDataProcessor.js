@@ -186,22 +186,33 @@ export function processMessageForChat(message) {
 /**
  * Check if a message has agent activity (tool calls or reasoning content)
  * @param {Object} message - Message object
+ * @param {number} messageIndex - Index of message in conversation (optional)
  * @returns {boolean} True if message has agent activity
  */
-export function hasAgentActivity(message) {
+export function hasAgentActivity(message, messageIndex = null) {
+  // Show agent decision path for all assistant messages except the first one
   if (!message || message.type !== 'assistant') {
     return false;
   }
 
-  // Check for tool calls
-  if (message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
-    return true;
+  // Exclude the first assistant message (greeting) - use multiple indicators
+  const isFirstAssistantMessage = messageIndex === 1 || // Second message overall (after user's first)
+                                  messageIndex === 0 || // Could be first if no user message yet
+                                  message.isInitialGreeting === true || // Explicit flag if backend sets it
+                                  (!message.toolCalls || message.toolCalls.length === 0) && 
+                                  (!message.initialContent && !message.finalContent) &&
+                                  message.content && message.content.length < 200; // Short simple message
+  
+  // Additional check: if message has no tool calls and is very short, might be greeting
+  const isLikelyGreeting = (!message.toolCalls || message.toolCalls.length === 0) &&
+                           (!message.initialContent && !message.finalContent) &&
+                           message.content && message.content.length < 150;
+
+  // Only exclude if it's likely the first message AND looks like a greeting
+  if ((messageIndex === 0 || messageIndex === 1) && isLikelyGreeting) {
+    return false;
   }
 
-  // Check for reasoning content (initial + final content pattern)
-  if (message.initialContent && message.finalContent) {
-    return true;
-  }
-
-  return false;
+  // Show for all other assistant messages to allow viewing the agent's decision path
+  return true;
 }

@@ -25,7 +25,7 @@ import { processMessageForChat, hasAgentActivity as checkAgentActivity } from "@
 // Lazy-load Chart to avoid SSR issues
 const Chart = dynamic(() => import("@/components/charts/Chart"), { ssr: false });
 
-export default function ChatMessage({ message: rawMessage }) {
+export default function ChatMessage({ message: rawMessage, messageIndex = null }) {
   const { language } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [dlDone, setDlDone] = useState(false);
@@ -73,7 +73,7 @@ export default function ChatMessage({ message: rawMessage }) {
   const isAssistant = message.type === 'assistant';
 
   // Check if this message has agent activity using the utility function
-  const hasAgentActivity = checkAgentActivity(message);
+  const hasAgentActivity = checkAgentActivity(message, messageIndex);
 
   // Calculate if tool animations are complete - optimized with stable dependencies
   const toolAnimationsComplete = React.useMemo(() => {
