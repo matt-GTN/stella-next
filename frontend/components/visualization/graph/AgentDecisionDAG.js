@@ -476,24 +476,26 @@ export default function AgentDecisionDAG({
         icon: '🧠'
       });
 
-      // Tool execution nodes with actual tool information
-      (Array.isArray(toolCalls) ? toolCalls : []).forEach((tc, i) => {
-        const toolContent = debugSafeExtraction(
-          () => debugExtractToolSummary([tc]),
-          simpleCreateContent(
-            tc?.name || tc?.tool_name || 'Tool',
-            language === 'fr' ? 'Exécution' : 'Execution',
-            `Tool execution ${i + 1}`
-          )
-        );
+      // Only add tool execution nodes if we have actual tool calls
+      if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+        toolCalls.forEach((tc, i) => {
+          const toolContent = debugSafeExtraction(
+            () => debugExtractToolSummary([tc]),
+            simpleCreateContent(
+              tc?.name || tc?.tool_name || 'Tool',
+              language === 'fr' ? 'Exécution' : 'Execution',
+              `Tool execution ${i + 1}`
+            )
+          );
 
-        list.push({
-          id: `exec-${i}`,
-          type: "execute",
-          content: toolContent,
-          icon: '🔧'
+          list.push({
+            id: `exec-${i}`,
+            type: "execute",
+            content: toolContent,
+            icon: '🔧'
+          });
         });
-      });
+      }
 
       // Final node
       list.push({
@@ -758,6 +760,102 @@ export default function AgentDecisionDAG({
           index
         });
       });
+
+      // Add fallback agent-to-end connection if missing and no tool execution path exists
+      const hasAgentToToolConnection = rawEdges.some(edge => edge.from === 'agent' && edge.to !== 'agent_query_detail');
+      const hasToolToCleanupConnection = rawEdges.some(edge => edge.to === 'cleanup_state');
+
+      // If agent doesn't connect to any tools and there's no path to cleanup, create direct connection
+      if (!hasAgentToToolConnection && !hasToolToCleanupConnection) {
+        const agentPos = positions['agent'];
+        const cleanupPos = positions['cleanup_state'];
+
+        if (agentPos && cleanupPos) {
+          const x0 = agentPos.x + agentPos.w / 2;
+          const y0 = agentPos.y + agentPos.h;
+          const x1 = cleanupPos.x + cleanupPos.w / 2;
+          const y1 = cleanupPos.y;
+
+          const d = generateCurvedPath(x0, y0, x1, y1, {
+            forceCurveType: 'vertical'
+          });
+
+          rawEdges.push({
+            id: 'fallback-agent-to-cleanup',
+            from: 'agent',
+            to: 'cleanup_state',
+            fromId: 'agent',
+            toId: 'cleanup_state',
+            d,
+            curveType: 'vertical',
+            highlighted: true,
+            dashed: false,
+            isUnused: false,
+            isExecuted: true,
+            isActive: true,
+            condition: 'text_response',
+            isDetailEdge: false,
+            index: edgesWithPaths.length
+          });
+
+          console.log('🎨 [AgentDecisionDAG] Added fallback agent-to-cleanup edge for text-only response');
+        }
+      }
+
+      // Add edge from __end__ back to agent for textual-only answer scenarios
+      const hasEndToAgentConnection = rawEdges.some(edge => edge.from === '__end__' && edge.to === 'agent');
+
+      if (!hasEndToAgentConnection) {
+        const endPos = positions['__end__'];
+        const agentPos = positions['agent'];
+
+        if (endPos && agentPos) {
+          // Create a curved path that goes around the left side of the graph
+          // Start from the left side of the END node
+          const x0 = endPos.x;
+          const y0 = endPos.y + endPos.h / 2;
+
+          // Go to the left side of the agent node
+          const x1 = agentPos.x;
+          const y1 = agentPos.y + agentPos.h / 2;
+
+          // Calculate the leftmost edge of the graph to route around it
+          const minX = Math.min(...Object.values(positions).map(p => p.x));
+
+          // ADJUSTABLE PARAMETERS:
+          const leftPadding = 25;        // Distance from nodes (50-200 recommended)
+          const curveIntensity = 0.01;    // How curved it is (0.3-1.0 recommended)
+          const routeX = minX - leftPadding;
+
+          // Create a curved path with adjustable curve intensity
+          const midY = (y0 + y1) / 2;
+          const controlOffset = Math.abs(y0 - y1) * curveIntensity; // Curve based on vertical distance
+
+          const d = `M ${x0} ${y0} 
+                     C ${routeX} ${y0 - controlOffset}, ${routeX} ${midY - controlOffset}, ${routeX} ${midY}
+                     C ${routeX} ${midY + controlOffset}, ${routeX} ${y1 + controlOffset}, ${x1} ${y1}`;
+
+          rawEdges.push({
+            id: 'end-to-agent-textual',
+            from: '__end__',
+            to: 'agent',
+            fromId: '__end__',
+            toId: 'agent',
+            d,
+            curveType: 'custom',
+            highlighted: true,
+            dashed: true, // Use dashed line to indicate conditional/textual flow
+            isUnused: false,
+            isExecuted: true,
+            isActive: true,
+            condition: 'textual_only_response',
+            isDetailEdge: false,
+            index: edgesWithPaths.length + 1
+          });
+
+          console.log('🎨 [AgentDecisionDAG] Added end-to-agent edge for textual-only responses (curved around left side)');
+        }
+      }
     } else {
       // Legacy edge logic with curved paths
       // Sequential path edges (horizontal curves)
