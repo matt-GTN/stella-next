@@ -15,7 +15,8 @@ import {
   debugExtractToolSummary,
   debugExtractNodeContent,
   debugSafeExtraction,
-  simpleCreateContent
+  simpleCreateContent,
+  simpleTruncateText
 } from './contentExtractor.debug';
 
 function useToolUniverse(toolCalls, allTools) {
@@ -49,12 +50,12 @@ function useToolUniverse(toolCalls, allTools) {
 }
 
 /**
- * Icon prioritization logic to select single most appropriate icon per node
+ * Icon prioritization logic to select single most appropriate SVG icon path per node
  * Implements Requirements 4.1, 4.2, 4.3, 4.4 for single icon display system
  * 
  * @param {Object} node - Node object with id, type, and optional icon
- * @param {string} fallbackIcon - Optional fallback icon if node has no icon
- * @returns {string} Single emoji icon to display
+ * @param {string} fallbackIcon - Optional fallback SVG path
+ * @returns {string} Single SVG path to display
  */
 function prioritizeIcon(node, fallbackIcon = null) {
   // Priority order for icon selection:
@@ -63,58 +64,146 @@ function prioritizeIcon(node, fallbackIcon = null) {
   // 3. Type-based default icons - Requirement 4.3
   // 4. Generic default based on node type - Requirement 4.3
 
-  // If node has explicit icon, use it (Requirement 4.1)
+  // SVG path definitions for clean icons (from Lucide)
+  const svgPaths = {
+    play: "m3 2 13 9L3 22V2z", // Play icon
+    brain: "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4", // Brain icon
+    wrench: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z", // Wrench icon
+    settings: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", // Settings icon
+    chart: "M3 3v18h18 M7 16l4-4 4 4 4-7", // BarChart3 icon
+    alert: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z M12 9v4 M12 17h.01", // AlertTriangle icon
+    trend: "m22 7-8.5 8.5-5-5L2 17", // TrendingUp icon
+    database: "M4 6c0 1.657 3.582 3 8 3s8-1.343 8-3-3.582-3-8-3-8 1.343-8 3Z M4 6v6c0 1.657 3.582 3 8 3s8-1.343 8-3V6 M4 12v6c0 1.657 3.582 3 8 3s8-1.343 8-3v-6", // Database icon
+    news: "M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2 M18 14h-8 M15 18h-3", // Newspaper icon
+    user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", // User icon
+    trash: "M3 6h18 M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6 M8 6V4c0-1 1-2 2-2h4c0-1 1-2 2-2v2", // Trash2 icon
+    flag: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22v-7", // Flag icon
+    circle: "M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" // Circle icon
+  };
+
+  // If node has explicit icon, check if it maps to a known SVG path
   if (node?.icon && typeof node.icon === 'string') {
-    return node.icon;
+    const iconMapping = {
+      '▶️': svgPaths.play,
+      '🧠': svgPaths.brain,
+      '🔧': svgPaths.wrench,
+      '⚙️': svgPaths.settings,
+      '📊': svgPaths.chart,
+      '⚠️': svgPaths.alert,
+      '📈': svgPaths.trend,
+      '📋': svgPaths.database,
+      '📰': svgPaths.news,
+      '👤': svgPaths.user,
+      '🧹': svgPaths.trash,
+      '🏁': svgPaths.flag,
+      '⚪': svgPaths.circle
+    };
+
+    if (iconMapping[node.icon]) {
+      return iconMapping[node.icon];
+    }
   }
 
   // If fallback icon provided, use it
-  if (fallbackIcon && typeof fallbackIcon === 'string') {
-    return fallbackIcon;
+  if (fallbackIcon && svgPaths[fallbackIcon]) {
+    return svgPaths[fallbackIcon];
   }
 
   // Default icon fallback system based on node types (Requirement 4.3)
   const nodeType = node?.type || 'default';
   const nodeId = node?.id || '';
 
-  // Type-based icon mapping
+  // Type-based SVG path mapping
   const typeIconMap = {
-    'start': '▶️',
-    'agent': '🧠',
-    'tool_execution': '🔧',
-    'execute': '🔧',
-    'preparation': '⚙️',
-    'generate_final_response': '📊',
-    'handle_error': '⚠️',
-    'prepare_chart_display': '📈',
-    'prepare_data_display': '📋',
-    'prepare_news_display': '📰',
-    'prepare_profile_display': '👤',
-    'cleanup_state': '🧹',
-    'end': '🏁',
-    'final': '🏁',
-    'tool-used': '🔧',
-    'tool-unused': '🔧',
-    'default': '⚪'
+    'start': svgPaths.play,
+    'agent': svgPaths.brain,
+    'tool_execution': svgPaths.wrench,
+    'execute': svgPaths.wrench,
+    'preparation': svgPaths.settings,
+    'generate_final_response': svgPaths.chart,
+    'handle_error': svgPaths.alert,
+    'prepare_chart_display': svgPaths.trend,
+    'prepare_data_display': svgPaths.database,
+    'prepare_news_display': svgPaths.news,
+    'prepare_profile_display': svgPaths.user,
+    'cleanup_state': svgPaths.trash,
+    'end': svgPaths.flag,
+    'final': svgPaths.flag,
+    'tool-used': svgPaths.wrench,
+    'tool-unused': svgPaths.wrench,
+    'default': svgPaths.circle
   };
 
   // Special handling for specific node IDs
-  if (nodeId === '__start__') return '▶️';
-  if (nodeId === '__end__') return '🏁';
-  if (nodeId.includes('tool') || nodeId.includes('exec')) return '🔧';
-  if (nodeId.includes('agent')) return '🧠';
-  if (nodeId.includes('error')) return '⚠️';
-  if (nodeId.includes('chart')) return '📈';
-  if (nodeId.includes('data')) return '📋';
-  if (nodeId.includes('news')) return '📰';
-  if (nodeId.includes('profile')) return '👤';
-  if (nodeId.includes('cleanup')) return '🧹';
+  if (nodeId === '__start__') return svgPaths.play;
+  if (nodeId === '__end__') return svgPaths.flag;
+  if (nodeId.includes('tool') || nodeId.includes('exec')) return svgPaths.wrench;
+  if (nodeId.includes('agent')) return svgPaths.brain;
+  if (nodeId.includes('error')) return svgPaths.alert;
+  if (nodeId.includes('chart')) return svgPaths.trend;
+  if (nodeId.includes('data')) return svgPaths.database;
+  if (nodeId.includes('news')) return svgPaths.news;
+  if (nodeId.includes('profile')) return svgPaths.user;
+  if (nodeId.includes('cleanup')) return svgPaths.trash;
 
   // Return type-based icon or default
   return typeIconMap[nodeType] || typeIconMap['default'];
 }
 
+// Helper function to wrap text based on node width - prefers single lines
+function wrapText(text, maxWidth, fontSize = 12, forceMultiLine = false) {
+  if (!text || typeof text !== 'string') return [''];
+
+  // Approximate character width based on font size (rough estimate)
+  const charWidth = fontSize * 0.6;
+  const maxCharsPerLine = Math.floor(maxWidth / charWidth);
+
+  // Be more generous with single line display - increase threshold by 20%
+  const singleLineThreshold = Math.floor(maxCharsPerLine * 1.2);
+
+  // If text is reasonably short, always display as single line
+  if (!forceMultiLine && text.length <= singleLineThreshold) {
+    return [text];
+  }
+
+  // Only wrap if text is genuinely too long for the node
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+
+    if (testLine.length <= maxCharsPerLine) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Word is too long, truncate it
+        lines.push(word.substring(0, maxCharsPerLine - 3) + '...');
+        currentLine = '';
+      }
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  // If we ended up with only one line anyway, just return the original text
+  if (lines.length === 1 && !forceMultiLine) {
+    return [text];
+  }
+
+  return lines.slice(0, 3); // Limit to 3 lines max
+}
+
 function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, type = 'default', node = null }) {
+  // Check if this is a detail node that needs special multi-line rendering
+  const isDetailNode = node?.id?.includes('_detail') || node?.isDetailNode || false;
+
   // Different colors and styles based on node type and usage
   const getNodeStyle = () => {
     // If node is unused, apply gray styling
@@ -122,6 +211,17 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
       return {
         fill: "#6b7280", // gray-500
         stroke: "#9ca3af", // gray-400
+        textColor: "#ffffff",
+        opacity: 1,
+        strokeDasharray: "none"
+      };
+    }
+
+    // Detail nodes get a slightly different color to distinguish them
+    if (isDetailNode) {
+      return {
+        fill: "#8b5cf6", // purple-600 (slightly darker)
+        stroke: "#a78bfa", // purple-300
         textColor: "#ffffff",
         opacity: 1,
         strokeDasharray: "none"
@@ -157,6 +257,39 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
   // Use the content directly since it's already truncated by debug functions
   const truncatedContent = displayContent;
 
+  // Calculate text widths and line counts for dynamic sizing
+  const textWidth = w * 0.85;
+
+  // Check if we have meaningful secondary and detail content
+  const hasSecondaryContent = isDetailNode && truncatedContent.secondary && truncatedContent.secondary !== truncatedContent.primary;
+  const hasDetailContent = isDetailNode && truncatedContent.detail &&
+    truncatedContent.detail !== truncatedContent.primary &&
+    truncatedContent.detail !== truncatedContent.secondary;
+
+  // If this is a detail node but only has primary content, force single line to avoid repetition
+  const shouldForceSingleLine = isDetailNode && !hasSecondaryContent && !hasDetailContent;
+
+  const primaryLines = shouldForceSingleLine ?
+    [simpleTruncateText(truncatedContent.primary, Math.floor(textWidth / (12 * 0.6)))] : // Force single line with truncation
+    wrapText(truncatedContent.primary, textWidth, isDetailNode ? 11 : 12);
+
+  const secondaryLines = hasSecondaryContent ?
+    wrapText(truncatedContent.secondary, textWidth, 9) : [];
+
+  const detailLines = hasDetailContent ?
+    wrapText(truncatedContent.detail, textWidth, 8) : [];
+
+  // Calculate dynamic height based on actual content
+  const baseHeight = h;
+  const iconOffset = prioritizedIcon ? 25 : 5;
+  const primaryHeight = primaryLines.length * 14;
+  const secondaryHeight = secondaryLines.length * 12;
+  const detailHeight = detailLines.length * 10;
+  const totalTextHeight = iconOffset + primaryHeight + secondaryHeight + detailHeight + (secondaryLines.length > 0 ? 5 : 0) + (detailLines.length > 0 ? 10 : 0);
+
+  // Use dynamic height if content requires it, otherwise use base height
+  const dynamicHeight = Math.max(baseHeight, totalTextHeight + 20);
+
   return (
     <motion.g
       initial={{ opacity: 0, scale: 0.8 }}
@@ -174,7 +307,7 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
         rx={16}
         ry={16}
         width={w}
-        height={truncatedContent.detail ? h + 20 : h}
+        height={dynamicHeight}
         fill={style.fill}
         stroke={style.stroke}
         strokeWidth={2}
@@ -184,41 +317,75 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
         transition={{ duration: 0.2 }}
       />
 
-      {/* Single Icon Display with consistent sizing and positioning (Requirement 4.4) */}
+      {/* SVG Icon Display with consistent sizing and positioning (Requirement 4.4) */}
       {prioritizedIcon && (
-        <text
-          x={x + w / 2}
-          y={y + 25}
-          fontSize={16}
-          textAnchor="middle"
-          opacity={isUnused ? 0.5 : 1}
-          style={{
-            userSelect: 'none',
-            pointerEvents: 'none'
-          }}
-        >
-          {prioritizedIcon}
-        </text>
+        <g transform={`translate(${x + w / 2}, ${y + 22})`}>
+          <svg
+            x={-8}
+            y={-8}
+            width={16}
+            height={16}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={style.textColor}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={isUnused ? 0.5 : 1}
+            style={{ pointerEvents: 'none' }}
+          >
+            <path d={prioritizedIcon} />
+          </svg>
+        </g>
       )}
 
-      {/* Primary Content (Main Title) */}
-      <text x={x + w / 2} y={prioritizedIcon ? y + 45 : y + 30} fontSize={13} fontWeight="600" fill={style.textColor} textAnchor="middle">
-        {truncatedContent.primary}
-      </text>
+      {/* Text Content - Adaptive text wrapping for all nodes */}
+      <g>
+        {/* Primary Content - wrapped to fit node width */}
+        {primaryLines.map((line, idx) => (
+          <text
+            key={`primary-${idx}`}
+            x={x + w / 2}
+            y={(prioritizedIcon ? y + 45 : y + 25) + (idx * 14)}
+            fontSize={isDetailNode ? 11 : 12}
+            fontWeight="600"
+            fill={style.textColor}
+            textAnchor="middle"
+          >
+            {line}
+          </text>
+        ))}
 
-      {/* Secondary Content (Subtitle) */}
-      {truncatedContent.secondary && (
-        <text x={x + w / 2} y={prioritizedIcon ? y + 60 : y + 48} fontSize={10} fill={style.textColor} opacity="0.7" textAnchor="middle">
-          {truncatedContent.secondary}
-        </text>
-      )}
+        {/* Secondary Content - only show if there's actual content and it's meaningful */}
+        {secondaryLines.length > 0 && secondaryLines.map((line, idx) => (
+          <text
+            key={`secondary-${idx}`}
+            x={x + w / 2}
+            y={(prioritizedIcon ? y + 45 : y + 25) + (primaryLines.length * 14) + 5 + (idx * 12)}
+            fontSize={9}
+            fill={style.textColor}
+            opacity="0.8"
+            textAnchor="middle"
+          >
+            {line}
+          </text>
+        ))}
 
-      {/* Detail Content (Extra Info) */}
-      {truncatedContent.detail && (
-        <text x={x + w / 2} y={y + (truncatedContent.secondary ? 75 : prioritizedIcon ? 75 : 65)} fontSize={9} fill={style.textColor} opacity="0.6" textAnchor="middle">
-          {truncatedContent.detail}
-        </text>
-      )}
+        {/* Detail Content - only show if there's actual detail content different from primary/secondary */}
+        {detailLines.length > 0 && detailLines.slice(0, 2).map((line, idx) => (
+          <text
+            key={`detail-${idx}`}
+            x={x + w / 2}
+            y={(prioritizedIcon ? y + 45 : y + 25) + (primaryLines.length * 14) + (secondaryLines.length * 12) + 10 + (idx * 10)}
+            fontSize={8}
+            fill={style.textColor}
+            opacity="0.7"
+            textAnchor="middle"
+          >
+            {line}
+          </text>
+        ))}
+      </g>
 
       {/* Tooltip for full content on hover */}
       {content?.originalContent && (
@@ -324,10 +491,14 @@ export default function AgentDecisionDAG({
     nodeHeight: 70,
     padding: 40,
 
+    // Detail node dimensions (wider for more information)
+    detailNodeWidth: 280, // Much wider for more text
+    detailNodeHeight: 70, // Keep same height as regular nodes
+
     // Horizontal spacing improvements (Requirement 3.1)
     minHorizontalSpacing: 200, // Minimum space between nodes
     preparationLayerSpacing: 180, // Specific spacing for preparation layer
-    detailNodeOffset: 60, // Offset for detail nodes from parent
+    detailNodeOffset: 80, // Increased offset for larger detail nodes
 
     // Vertical spacing improvements (Requirement 3.2)
     minVerticalSpacing: 120, // Minimum space between workflow layers
@@ -403,11 +574,12 @@ export default function AgentDecisionDAG({
 
   const calculateDetailNodePosition = React.useCallback((parentPos, detailIndex = 0) => {
     // Detail node positioning system with proper offsets (Requirement 3.3)
+    // Use larger dimensions for detail nodes
     return {
       x: parentPos.x + layoutConfig.nodeWidth + layoutConfig.detailNodeOffset,
-      y: parentPos.y + (detailIndex * (layoutConfig.nodeHeight + 20)), // Stack multiple details vertically
-      w: layoutConfig.nodeWidth,
-      h: layoutConfig.nodeHeight
+      y: parentPos.y + (detailIndex * (layoutConfig.detailNodeHeight + 30)), // Stack multiple details vertically with more space
+      w: layoutConfig.detailNodeWidth, // Use larger width for detail nodes
+      h: layoutConfig.detailNodeHeight // Use larger height for detail nodes
     };
   }, [layoutConfig]);
 
@@ -418,11 +590,11 @@ export default function AgentDecisionDAG({
       console.log('🎨 [AgentDecisionDAG] Using LangSmith nodes:', graphData.nodes);
 
       return graphData.nodes
-        .filter(node => !node.type || node.type !== 'tool_detail') // Exclude tool detail nodes from main flow
+        // Include all nodes, including detail nodes to show actual user queries and tool details
         .map(node => {
-          // Extract actual content for this node using debug version
+          // Extract actual content for this node using debug version with full graph context
           const nodeContent = debugSafeExtraction(
-            () => debugExtractNodeContent(node),
+            () => debugExtractNodeContent(node, graphData),
             simpleCreateContent(
               (node.label && typeof node.label === 'object')
                 ? (node.label[language] || node.label.en || node.label.fr || node.id)
@@ -810,6 +982,23 @@ export default function AgentDecisionDAG({
         const agentPos = positions['agent'];
 
         if (endPos && agentPos) {
+          // Detect if this is truly a textual-only response by checking if tool execution nodes were used
+          const toolExecutionNodes = ['execute_tool', 'generate_final_response', 'prepare_chart_display',
+            'prepare_data_display', 'prepare_news_display', 'prepare_profile_display', 'handle_error'];
+
+          // Check if any tool execution nodes are executed/active in the current graph
+          const hasToolExecution = pathNodes.some(node =>
+            toolExecutionNodes.includes(node.id) && (node.isExecuted || node.isActive)
+          );
+
+          // Also check if there are any executed edges going to tool execution nodes
+          const hasExecutedToolEdges = rawEdges.some(edge =>
+            toolExecutionNodes.includes(edge.to) && (edge.isExecuted || edge.isActive)
+          );
+
+          // This edge should only be active/highlighted for true textual-only responses
+          const isTextualOnlyResponse = !hasToolExecution && !hasExecutedToolEdges;
+
           // Create a curved path that goes around the left side of the graph
           // Start from the left side of the END node
           const x0 = endPos.x;
@@ -843,17 +1032,21 @@ export default function AgentDecisionDAG({
             toId: 'agent',
             d,
             curveType: 'custom',
-            highlighted: true,
+            highlighted: isTextualOnlyResponse,
             dashed: true, // Use dashed line to indicate conditional/textual flow
-            isUnused: false,
-            isExecuted: true,
-            isActive: true,
+            isUnused: !isTextualOnlyResponse,
+            isExecuted: isTextualOnlyResponse,
+            isActive: isTextualOnlyResponse,
             condition: 'textual_only_response',
             isDetailEdge: false,
             index: edgesWithPaths.length + 1
           });
 
-          console.log('🎨 [AgentDecisionDAG] Added end-to-agent edge for textual-only responses (curved around left side)');
+          console.log('🎨 [AgentDecisionDAG] Added end-to-agent edge for textual-only responses (curved around left side)', {
+            isTextualOnlyResponse,
+            hasToolExecution,
+            hasExecutedToolEdges
+          });
         }
       }
     } else {

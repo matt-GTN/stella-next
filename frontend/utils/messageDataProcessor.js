@@ -108,10 +108,16 @@ export function validateMessageForVisualization(message) {
     }
   }
 
-  // Ensure sessionId is present for graph visualization
-  if (!validation.normalizedMessage.sessionId && message.id) {
-    validation.normalizedMessage.sessionId = message.id;
-    validation.warnings.push('SessionId was missing, using message ID as fallback');
+  // Ensure each message has a unique ID for visualization
+  if (!validation.normalizedMessage.id) {
+    validation.normalizedMessage.id = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    validation.warnings.push('Message ID was missing, generated unique ID');
+  }
+
+  // Ensure sessionId is present for graph visualization - use message ID as unique identifier
+  if (!validation.normalizedMessage.sessionId) {
+    validation.normalizedMessage.sessionId = validation.normalizedMessage.id;
+    validation.warnings.push('SessionId was missing, using message ID as unique session identifier');
   }
 
   return validation;
@@ -177,7 +183,10 @@ export function processMessageForChat(message) {
     ...normalizedMessage,
     toolCalls: normalizedMessage.toolCalls || [],
     initialContent: normalizedMessage.initialContent || '',
-    finalContent: normalizedMessage.finalContent || ''
+    finalContent: normalizedMessage.finalContent || '',
+    // Ensure each message has a unique ID for trace visualization
+    id: normalizedMessage.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    sessionId: normalizedMessage.sessionId || normalizedMessage.id || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   };
 
   return processedMessage;

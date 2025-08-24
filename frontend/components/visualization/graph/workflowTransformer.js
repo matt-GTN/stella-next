@@ -6,21 +6,29 @@
 const transformationCache = new Map();
 
 /**
- * Generate cache key for workflow transformations
+ * Generate cache key for workflow transformations - includes message-specific data for uniqueness
  */
-function generateTransformationCacheKey(toolCalls, currentStep) {
+function generateTransformationCacheKey(toolCalls, currentStep, messageData = null) {
+  // Include message-specific data to ensure each message gets unique visualization
+  let messageSignature = '';
+  if (messageData) {
+    const contentSignature = (messageData.content || messageData.initialContent || messageData.finalContent || '').substring(0, 30);
+    const timestamp = messageData.timestamp ? new Date(messageData.timestamp).getTime() : Date.now();
+    messageSignature = `-msg:${messageData.id || 'unknown'}-ts:${timestamp}-content:${contentSignature.replace(/[^a-zA-Z0-9]/g, '')}`;
+  }
+
   if (!toolCalls || !Array.isArray(toolCalls)) {
-    return `empty-${currentStep}`;
+    return `empty-${currentStep}${messageSignature}`;
   }
 
   try {
-    const toolSignature = toolCalls.map(tc =>
-      `${tc?.name || tc?.tool_name || 'unknown'}-${tc?.status || 'completed'}`
+    const toolSignature = toolCalls.map((tc, index) =>
+      `${tc?.name || tc?.tool_name || 'unknown'}-${tc?.status || 'completed'}-${index}`
     ).join('|');
-    return `${toolSignature}-${currentStep}`;
+    return `${toolSignature}-${currentStep}${messageSignature}`;
   } catch (error) {
     console.error('Error generating cache key:', error);
-    return `error-${currentStep}-${Date.now()}`;
+    return `error-${currentStep}-${Date.now()}${messageSignature}`;
   }
 }
 
@@ -299,13 +307,22 @@ export function generateWorkflowEdges(nodes, toolCalls = [], currentStep = -1) {
     });
 
   } else {
-    // No tools - direct path
+    // No tools - direct path through response generation
     edges.push({
-      id: 'agent-end',
+      id: 'agent-generate_final_response',
       from: 'agent',
-      to: 'end',
+      to: 'generate_final_response',
       condition: 'no_tools_needed',
-      isActive: currentStep === -1,
+      isActive: true,
+      isExecuted: currentStep === -1
+    });
+
+    edges.push({
+      id: 'generate_final_response-end',
+      from: 'generate_final_response',
+      to: 'end',
+      condition: 'workflow_complete',
+      isActive: true,
       isExecuted: currentStep === -1
     });
   }
@@ -356,7 +373,10 @@ export function determineNodeStates(nodes, toolCalls = [], currentStep = -1) {
       states.executedNodes.add('cleanup_state');
       states.executedNodes.add('end');
     } else {
+      // Even with no tools, show response generation
+      states.activeNodes.add('generate_final_response');
       states.activeNodes.add('end');
+      states.executedNodes.add('generate_final_response');
       states.executedNodes.add('end');
     }
 
@@ -399,10 +419,21 @@ export function determineNodeStates(nodes, toolCalls = [], currentStep = -1) {
 }
 
 /**
- * Synchronous transformation function
+ * Synchronous transformation function with message-specific caching
  */
-export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, language = 'en') {
+export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, language = 'en', messageData = null) {
+  // Generate message-specific cache key
+  const cacheKey = generateTransformationCacheKey(toolCalls, currentStep, messageData);
+  
+  // Check cache first
+  if (transformationCache.has(cacheKey)) {
+    console.log('💾 [WorkflowTransform] Using cached data for message:', messageData?.id);
+    return transformationCache.get(cacheKey);
+  }
+
   try {
+    console.log('🔄 [WorkflowTransform] Generating new visualization for message:', messageData?.id);
+    
     const { nodes, executedTools } = transformToolCallsToNodes(toolCalls, currentStep);
     const edges = generateWorkflowEdges(nodes, toolCalls, currentStep);
     const nodeStates = determineNodeStates(nodes, toolCalls, currentStep);
@@ -415,7 +446,7 @@ export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, lang
       node.isExecuting = nodeStates.executingNodes.has(nodeId);
     });
 
-    return {
+    const result = {
       nodes: Object.values(nodes),
       edges,
       executedTools,
@@ -425,9 +456,16 @@ export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, lang
         currentStep,
         isComplete: currentStep === -1,
         syncFallback: true,
-        language
+        language,
+        messageId: messageData?.id,
+        cached: false
       }
     };
+
+    // Cache the result
+    transformationCache.set(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error('Sync transformation error:', error);
     return {
@@ -435,24 +473,26 @@ export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, lang
       edges: [],
       executedTools: [],
       nodeStates: { activeNodes: new Set(), executedNodes: new Set(), executingNodes: new Set() },
-      metadata: { error: true, syncFallback: true, errorMessage: error.message }
+      metadata: { error: true, syncFallback: true, errorMessage: error.message, messageId: messageData?.id }
     };
   }
 }
 
 /**
- * Main async transformation function (simplified)
+ * Main async transformation function with message-specific caching
  */
-export async function transformWorkflowData(toolCalls = [], currentStep = -1, language = 'en') {
-  // Check cache first
-  const cacheKey = generateTransformationCacheKey(toolCalls, currentStep);
+export async function transformWorkflowData(toolCalls = [], currentStep = -1, language = 'en', messageData = null) {
+  // Check cache first with message-specific key
+  const cacheKey = generateTransformationCacheKey(toolCalls, currentStep, messageData);
   if (transformationCache.has(cacheKey)) {
-    return transformationCache.get(cacheKey);
+    const cached = transformationCache.get(cacheKey);
+    cached.metadata.cached = true;
+    return cached;
   }
 
   try {
     // Use sync version for now
-    const result = transformWorkflowDataSync(toolCalls, currentStep, language);
+    const result = transformWorkflowDataSync(toolCalls, currentStep, language, messageData);
     result.metadata.async = true;
     result.metadata.cached = false;
 
@@ -467,7 +507,7 @@ export async function transformWorkflowData(toolCalls = [], currentStep = -1, la
       edges: [],
       executedTools: [],
       nodeStates: { activeNodes: new Set(), executedNodes: new Set(), executingNodes: new Set() },
-      metadata: { error: true, errorMessage: error.message }
+      metadata: { error: true, errorMessage: error.message, messageId: messageData?.id }
     };
   }
 }

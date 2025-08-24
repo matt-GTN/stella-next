@@ -21,47 +21,87 @@ const GraphVisualizationWrapper = ({
 
   useEffect(() => {
     const loadGraphData = async () => {
-      console.log('🔍 [GraphWrapper] Début du chargement des données graphique');
-      console.log('🔍 [GraphWrapper] Message:', message?.id, 'SessionId:', sessionId);
+      console.log('🔍 [GraphWrapper] ===== LOADING GRAPH DATA =====');
+      console.log('🔍 [GraphWrapper] Message ID:', message?.id);
+      console.log('🔍 [GraphWrapper] Session ID:', sessionId);
+      console.log('🔍 [GraphWrapper] Tool calls:', message?.toolCalls?.length || 0);
+      console.log('🔍 [GraphWrapper] Content preview:', (message?.content || message?.initialContent || '').substring(0, 50));
       
       setLoading(true);
       setError(null);
 
       try {
-        // Déterminer l'ID de session
-        const effectiveSessionId = sessionId || message?.sessionId || message?.id;
+        // Each message should have its own unique identifier for trace visualization
+        const messageId = message?.id;
+        const effectiveSessionId = sessionId || message?.sessionId || messageId;
+        
         console.log('🔍 [GraphWrapper] ID de session effectif:', effectiveSessionId);
+        console.log('🔍 [GraphWrapper] Message ID:', messageId);
         
-        if (!effectiveSessionId) {
-          throw new Error('Aucun ID de session disponible');
+        if (!effectiveSessionId && !messageId) {
+          throw new Error('Aucun identifiant de message disponible');
         }
 
-        // Essayer d'abord les données LangSmith
-        try {
-          console.log('🔍 [GraphWrapper] Tentative de récupération des données LangSmith...');
-          const langsmithGraphData = await getLangSmithGraphData(effectiveSessionId, currentStep, language);
-          console.log('✅ [GraphWrapper] Données LangSmith récupérées:', langsmithGraphData);
-          setGraphData(langsmithGraphData);
-          setDataSource('langsmith');
-          setLoading(false);
-          return;
-        } catch (langsmithError) {
-          console.warn('⚠️ [GraphWrapper] Impossible de récupérer les données LangSmith:', langsmithError.message);
-          console.warn('⚠️ [GraphWrapper] Fallback vers les données legacy');
-        }
-
-        // Fallback vers les données legacy du message
-        console.log('📋 [GraphWrapper] Utilisation des données legacy pour la visualisation');
-        console.log('📋 [GraphWrapper] Tool calls disponibles:', message?.toolCalls?.length || 0);
+        // Try LangSmith data first, but use message-specific session ID
+        // This ensures each message gets its own trace visualization
+        let langsmithSuccess = false;
         
-        if (!message?.toolCalls || !Array.isArray(message.toolCalls)) {
-          throw new Error('Aucune donnée de tool calls disponible dans le message');
+        if (effectiveSessionId) {
+          try {
+            console.log('🔍 [GraphWrapper] Tentative de récupération des données LangSmith pour:', effectiveSessionId);
+            // Pass message data to ensure unique caching per message
+            const langsmithGraphData = await getLangSmithGraphData(effectiveSessionId, currentStep, language, message);
+            
+            // Verify we got valid data with nodes
+            if (langsmithGraphData && langsmithGraphData.nodes && langsmithGraphData.nodes.length > 0) {
+              console.log('✅ [GraphWrapper] Données LangSmith récupérées avec succès pour message:', messageId, {
+                nodes: langsmithGraphData.nodes.length,
+                edges: langsmithGraphData.edges.length
+              });
+              setGraphData(langsmithGraphData);
+              setDataSource('langsmith');
+              langsmithSuccess = true;
+            } else {
+              console.warn('⚠️ [GraphWrapper] Données LangSmith vides ou invalides pour message:', messageId);
+            }
+          } catch (langsmithError) {
+            console.warn('⚠️ [GraphWrapper] Erreur LangSmith pour message:', messageId, langsmithError.message);
+            
+            // Check if it's a timeout error specifically
+            if (langsmithError.message.includes('timeout') || langsmithError.message.includes('Timeout')) {
+              console.warn('⏰ [GraphWrapper] Timeout détecté - fallback immédiat vers les données legacy');
+            } else {
+              console.warn('⚠️ [GraphWrapper] Autre erreur LangSmith - fallback vers les données legacy');
+            }
+          }
         }
 
-        const legacyGraphData = transformWorkflowDataSync(message.toolCalls, currentStep, language);
-        console.log('📋 [GraphWrapper] Données legacy transformées:', legacyGraphData);
-        setGraphData(legacyGraphData);
-        setDataSource('legacy');
+        // If LangSmith failed or no session ID, use legacy data from the message
+        if (!langsmithSuccess) {
+          console.log('📋 [GraphWrapper] Utilisation des données legacy pour la visualisation');
+          console.log('📋 [GraphWrapper] Tool calls disponibles:', message?.toolCalls?.length || 0);
+          
+          // Even if no tool calls, we can still create a basic visualization
+          const toolCalls = message?.toolCalls || [];
+          
+          if (toolCalls.length === 0) {
+            console.log('📋 [GraphWrapper] Aucun tool call - création d\'une visualisation basique');
+          }
+
+          // Pass message data to ensure unique visualization per message
+          const legacyGraphData = transformWorkflowDataSync(toolCalls, currentStep, language, message);
+          console.log('📋 [GraphWrapper] Données legacy transformées pour message:', messageId, {
+            nodes: legacyGraphData?.nodes?.length || 0,
+            edges: legacyGraphData?.edges?.length || 0
+          });
+          
+          if (legacyGraphData && legacyGraphData.nodes && legacyGraphData.nodes.length > 0) {
+            setGraphData(legacyGraphData);
+            setDataSource('legacy');
+          } else {
+            throw new Error('Impossible de créer une visualisation pour ce message');
+          }
+        }
 
       } catch (err) {
         console.error('❌ [GraphWrapper] Erreur lors du chargement des données du graphique:', err);
@@ -71,8 +111,11 @@ const GraphVisualizationWrapper = ({
       }
     };
 
-    loadGraphData();
-  }, [message, currentStep, language, sessionId]);
+    // Add a small delay to prevent multiple simultaneous requests
+    const timeoutId = setTimeout(loadGraphData, 50);
+    
+    return () => clearTimeout(timeoutId);
+  }, [message?.id, currentStep, language, sessionId]); // Use message.id as key dependency
 
   if (loading) {
     return (

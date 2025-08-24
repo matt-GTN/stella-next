@@ -74,6 +74,31 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
 
   // Check if this message has agent activity using the utility function
   const hasAgentActivity = checkAgentActivity(message, messageIndex);
+  
+  // Check if message is completely finished (not streaming, processing, or waiting for content)
+  const isMessageFinished = React.useMemo(() => {
+    // Message is not finished if it's still streaming or processing
+    if (message.isStreaming || message.isProcessing) {
+      return false;
+    }
+    
+    // For messages with tools, wait for final content to be shown
+    const hasTools = message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
+    if (hasTools) {
+      return showFinalContent; // Wait for tool animations and final content to complete
+    }
+    
+    // For simple text messages, check if we have content
+    return !!(message.content || message.initialContent || message.finalContent);
+  }, [
+    message.isStreaming, 
+    message.isProcessing, 
+    showFinalContent,
+    message.toolCalls?.length,
+    !!message.content,
+    !!message.initialContent,
+    !!message.finalContent
+  ]);
 
   // Calculate if tool animations are complete - optimized with stable dependencies
   const toolAnimationsComplete = React.useMemo(() => {
@@ -429,8 +454,8 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                     </motion.div>
                   )}
 
-                  {/* Agent Decision Graph - beautiful visualization with styled toggle button */}
-                  {hasAgentActivity && (
+                  {/* Agent Decision Graph - beautiful visualization with styled toggle button - only show when message is finished */}
+                  {hasAgentActivity && isMessageFinished && (
                     <div className="border-t border-gray-200 pt-6">
                       {/* Beautiful toggle button styled like ToolCall pills */}
                       <motion.div
@@ -477,7 +502,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                               <GraphVisualizationWrapper
                                 message={message}
                                 language={language}
-                                sessionId={message.sessionId || message.id}
+                                sessionId={message.id} // Use message ID as unique identifier for each message's trace
                               />
                             </div>
                           </div>

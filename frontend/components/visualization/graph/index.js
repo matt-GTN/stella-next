@@ -24,8 +24,19 @@ export {
   transformLangSmithData,
   fetchLangSmithTrace,
   hasLangSmithTrace,
-  getLangSmithGraphData
+  getLangSmithGraphData,
+  clearLangSmithCache
 } from './langsmithTransformer';
+
+// Utility function to clear all caches
+export function clearAllGraphCaches() {
+  const { clearTransformationCache } = require('./workflowTransformer');
+  const { clearLangSmithCache } = require('./langsmithTransformer');
+  
+  clearTransformationCache();
+  clearLangSmithCache();
+  console.log('🧹 [GraphVisualization] All caches cleared');
+}
 
 // Content extraction utilities
 export {

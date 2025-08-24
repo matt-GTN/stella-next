@@ -7,6 +7,13 @@
 
 import { transformWorkflowDataSync } from './workflowTransformer';
 
+// Cache for LangSmith data to prevent multiple API calls for the same session
+const langsmithDataCache = new Map();
+const langsmithRequestCache = new Map(); // Cache for ongoing requests
+
+// Cache timeout (5 minutes)
+const CACHE_TIMEOUT = 5 * 60 * 1000;
+
 /**
  * Transforme les données de trace LangSmith en format compatible avec le graphique existant
  * @param {Object} langsmithData - Données de trace LangSmith du backend
@@ -457,7 +464,40 @@ function getToolConfig(toolName) {
 }
 
 /**
- * Récupère les données de trace LangSmith depuis l'API
+ * Clear LangSmith caches
+ */
+export function clearLangSmithCache() {
+  langsmithDataCache.clear();
+  langsmithRequestCache.clear();
+  console.log('🧹 [LangSmith] Cache cleared');
+}
+
+/**
+ * Generate cache key for LangSmith data - includes message-specific data for uniqueness
+ */
+function generateLangSmithCacheKey(sessionId, currentStep = -1, language = 'en', messageData = null) {
+  // Include message-specific data in cache key to ensure each message gets unique visualization
+  let messageSignature = '';
+  if (messageData) {
+    const toolCallsSignature = messageData.toolCalls ? 
+      messageData.toolCalls.map((tc, index) => `${tc.name || tc.tool_name || 'unknown'}-${index}`).join('|') : 
+      'no-tools';
+    const contentSignature = (messageData.content || messageData.initialContent || messageData.finalContent || '').substring(0, 50);
+    const timestamp = messageData.timestamp ? new Date(messageData.timestamp).getTime() : Date.now();
+    messageSignature = `-msg:${messageData.id || 'unknown'}-ts:${timestamp}-tools:${toolCallsSignature}-content:${contentSignature.replace(/[^a-zA-Z0-9]/g, '')}`;
+  }
+  return `${sessionId}-${currentStep}-${language}${messageSignature}`;
+}
+
+/**
+ * Check if cached data is still valid
+ */
+function isCacheValid(cacheEntry) {
+  return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_TIMEOUT;
+}
+
+/**
+ * Récupère les données de trace LangSmith depuis l'API avec cache et déduplication des requêtes
  * @param {string} sessionId - ID de session
  * @returns {Promise<Object>} Données de trace LangSmith
  */
@@ -465,13 +505,60 @@ export async function fetchLangSmithTrace(sessionId) {
   try {
     console.log('🔍 [LangSmith] Récupération des traces pour session:', sessionId);
     
-    // Use direct backend URL for now (Next.js proxy might have issues)
-    const apiUrl = `http://localhost:8000/langsmith-trace/${sessionId}`;
+    // Check if there's already an ongoing request for this session
+    if (langsmithRequestCache.has(sessionId)) {
+      console.log('🔄 [LangSmith] Requête en cours détectée, attente de la réponse...');
+      return await langsmithRequestCache.get(sessionId);
+    }
     
-    // Ajouter un timeout côté client aussi
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 secondes
+    // Check cache first
+    const cacheKey = sessionId;
+    const cachedEntry = langsmithDataCache.get(cacheKey);
     
+    if (isCacheValid(cachedEntry)) {
+      console.log('💾 [LangSmith] Données récupérées depuis le cache');
+      return cachedEntry.data;
+    }
+    
+    // Create the request promise and cache it to prevent duplicate requests
+    const requestPromise = performLangSmithRequest(sessionId);
+    langsmithRequestCache.set(sessionId, requestPromise);
+    
+    try {
+      const data = await requestPromise;
+      
+      // Cache the successful result
+      langsmithDataCache.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+      });
+      
+      console.log('✅ [LangSmith] Données récupérées et mises en cache');
+      return data;
+      
+    } finally {
+      // Always remove the request from the ongoing requests cache
+      langsmithRequestCache.delete(sessionId);
+    }
+
+  } catch (error) {
+    console.error('❌ [LangSmith] Erreur lors de la récupération:', error);
+    throw error;
+  }
+}
+
+/**
+ * Perform the actual LangSmith API request
+ */
+async function performLangSmithRequest(sessionId) {
+  // Use direct backend URL for now (Next.js proxy might have issues)
+  const apiUrl = `http://localhost:8000/langsmith-trace/${sessionId}`;
+  
+  // Ajouter un timeout côté client aussi
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 secondes
+  
+  try {
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
@@ -499,11 +586,11 @@ export async function fetchLangSmithTrace(sessionId) {
     return data;
 
   } catch (error) {
+    clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
       console.error('⏰ [LangSmith] Timeout côté client');
-      throw new Error('Timeout lors de la récupération des traces LangSmith');
+      throw new Error('[LangSmith] timeout côté client');
     }
-    console.error('❌ [LangSmith] Erreur lors de la récupération:', error);
     throw error;
   }
 }
@@ -561,10 +648,20 @@ export async function hasLangSmithTrace(sessionId) {
  * @param {string} sessionId - ID de session
  * @param {number} currentStep - Étape actuelle
  * @param {string} language - Langue
+ * @param {Object} messageData - Message data for unique caching
  * @returns {Promise<Object>} Données formatées pour le graphique
  */
-export async function getLangSmithGraphData(sessionId, currentStep = -1, language = 'en') {
+export async function getLangSmithGraphData(sessionId, currentStep = -1, language = 'en', messageData = null) {
   console.log('🔍 [LangSmith] getLangSmithGraphData appelé pour session:', sessionId);
+  
+  // Check transformed data cache first - include message data for unique caching
+  const transformedCacheKey = generateLangSmithCacheKey(sessionId, currentStep, language, messageData);
+  const cachedTransformed = langsmithDataCache.get(`transformed-${transformedCacheKey}`);
+  
+  if (isCacheValid(cachedTransformed)) {
+    console.log('💾 [LangSmith] Données transformées récupérées depuis le cache pour message:', messageData?.id);
+    return cachedTransformed.data;
+  }
   
   try {
     const langsmithData = await fetchLangSmithTrace(sessionId);
@@ -572,6 +669,12 @@ export async function getLangSmithGraphData(sessionId, currentStep = -1, languag
     
     const transformedData = transformLangSmithData(langsmithData, currentStep, language);
     console.log('🔍 [LangSmith] Données transformées:', transformedData);
+    
+    // Cache the transformed data with message-specific key
+    langsmithDataCache.set(`transformed-${transformedCacheKey}`, {
+      data: transformedData,
+      timestamp: Date.now()
+    });
     
     return transformedData;
   } catch (error) {
