@@ -668,21 +668,31 @@ async def analyze_confidence(request: ConfidenceAnalysisRequest):
         )
 
 @app.post("/modeling/shap-analysis")
-async def analyze_shap(request: ShapAnalysisRequest):
+async def analyze_shap(request: Dict[str, Any]):
     """
     Perform SHAP analysis on model predictions for explainability
     """
     try:
-        logger.info(f"Performing SHAP analysis for {len(request.error_indices)} error cases")
+        logger.info(f"SHAP Analysis Raw Request received:")
+        logger.info(f"  - Request keys: {list(request.keys())}")
+        logger.info(f"  - Request content: {request}")
+        
+        # Extract data from request
+        model_results = request.get('model_results')
+        error_indices = request.get('error_indices', [])
+        
+        if not model_results:
+            raise HTTPException(status_code=400, detail="Model results required for SHAP analysis")
+        
+        if not error_indices:
+            raise HTTPException(status_code=400, detail="Error indices required for SHAP analysis")
+        
+        logger.info(f"  - Error indices count: {len(error_indices)}")
+        logger.info(f"  - Model results keys: {list(model_results.keys()) if model_results else 'None'}")
+        logger.info(f"Performing SHAP analysis for {len(error_indices)} error cases")
         
         # Validate error indices
-        if not request.error_indices:
-            raise HTTPException(
-                status_code=400,
-                detail="Error indices are required for SHAP analysis"
-            )
-        
-        if len(request.error_indices) > 10:
+        if len(error_indices) > 10:
             raise HTTPException(
                 status_code=400,
                 detail="Maximum 10 error cases allowed for SHAP analysis"
@@ -701,7 +711,7 @@ async def analyze_shap(request: ShapAnalysisRequest):
             from src.modeling_utils import perform_shap_analysis
             
             # Perform SHAP analysis with session-based caching
-            result = perform_shap_analysis(request.model_results, request.error_indices, session_id)
+            result = perform_shap_analysis(model_results, error_indices, session_id)
             
             if 'error' in result:
                 raise HTTPException(
@@ -1208,44 +1218,7 @@ async def analyze_confidence(request: Dict[str, Any]):
         logger.error(f"Error in confidence analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Confidence analysis failed: {str(e)}")
 
-@app.post("/modeling/shap_analysis")
-async def shap_analysis(request: Dict[str, Any]):
-    """
-    Perform SHAP analysis on model predictions
-    """
-    try:
-        model_results = request.get('model_results')
-        error_indices = request.get('error_indices', [])
-        
-        if not model_results:
-            raise HTTPException(status_code=400, detail="Model results required for SHAP analysis")
-        
-        logger.info(f"Performing SHAP analysis on {len(error_indices)} error cases")
-        
-        # Change to agent directory for execution
-        current_dir = os.getcwd()
-        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
-        os.chdir(agent_dir)
-        
-        try:
-            from src.modeling_utils import perform_shap_analysis
-            
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                perform_shap_analysis,
-                model_results,
-                error_indices
-            )
-            
-            return result
-            
-        finally:
-            os.chdir(current_dir)
-            
-    except Exception as e:
-        logger.error(f"Error in SHAP analysis: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"SHAP analysis failed: {str(e)}")
+# Removed duplicate SHAP analysis endpoint - using the new one with proper request models
 
 # Error handlers
 @app.exception_handler(HTTPException)

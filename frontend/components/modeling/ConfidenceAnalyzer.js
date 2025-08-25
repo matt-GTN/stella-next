@@ -25,7 +25,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           modelResults.probabilities,
           modelResults.predictions,
           modelResults.test_indices || [],
-          confidenceThreshold
+          confidenceThreshold,
+          modelResults.true_labels || []
         );
         setConfidenceAnalysis(analysis);
         setAnalysisError(null);
@@ -43,8 +44,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
     return () => clearTimeout(timer);
   }, [confidenceThreshold, modelResults, language]);
 
-  const calculateConfidenceAnalysis = (probabilities, predictions, testIndices, threshold) => {
-    if (!probabilities || !predictions) return null;
+  const calculateConfidenceAnalysis = (probabilities, predictions, testIndices, threshold, trueLabels) => {
+    if (!probabilities || !predictions || !trueLabels) return null;
 
     // Calculate confidence for each prediction (max probability)
     const confidences = probabilities.map(prob => Math.max(...prob));
@@ -74,14 +75,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
       };
     }
 
-    // For demo purposes, simulate ground truth labels
-    // In real implementation, this would come from the backend
-    const simulatedGroundTruth = predictions.map((pred, idx) => {
-      // Create realistic ground truth with some errors
-      const confidence = confidences[idx];
-      const errorRate = confidence > 0.8 ? 0.1 : confidence > 0.6 ? 0.2 : 0.3;
-      return Math.random() > errorRate ? pred : 1 - pred;
-    });
+    // Use real ground truth labels from the backend
+    const groundTruth = trueLabels;
 
     // Calculate high-confidence accuracy
     let correctHighConfidence = 0;
@@ -93,7 +88,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
 
     highConfidenceIndices.forEach(idx => {
       const predicted = predictions[idx];
-      const actual = simulatedGroundTruth[idx];
+      const actual = groundTruth[idx];
       
       if (predicted === actual) {
         correctHighConfidence++;
@@ -121,7 +116,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
     
     // Calculate overall accuracy for comparison
     const overallCorrect = predictions.reduce((sum, pred, idx) => 
-      sum + (pred === simulatedGroundTruth[idx] ? 1 : 0), 0);
+      sum + (pred === groundTruth[idx] ? 1 : 0), 0);
     const overallAccuracy = overallCorrect / totalPredictions;
     const precisionImprovement = ((highConfidenceAccuracy - overallAccuracy) / overallAccuracy) * 100;
 
@@ -212,33 +207,11 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="backdrop-blur-sm bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-3xl p-8">
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-            <Target className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-              {language === 'fr' ? 'Analyse par Confiance' : 'Confidence-Based Analysis'}
-            </h2>
-            <p className="text-gray-600">
-              {language === 'fr' ? 'Filtrage de risque haute précision' : 'High-precision risk filtering'}
-            </p>
-          </div>
-        </div>
-        
-        <p className="text-gray-700 leading-relaxed">
-          {language === 'fr' 
-            ? "Ajustez le seuil de confiance pour transformer le modèle en filtre de risque. Plus le seuil est élevé, plus la précision augmente, mais la couverture diminue."
-            : "Adjust the confidence threshold to transform the model into a risk filter. Higher thresholds increase precision but reduce coverage."
-          }
-        </p>
-      </div>
+     
 
       {/* Error Display */}
       {analysisError && (
-        <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/20 rounded-2xl p-6">
+        <div className="backdrop-blur-xs shadow-lg bg-red-500/10 border border-red-500/20 rounded-2xl p-6">
           <div className="flex items-start space-x-3">
             <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-4 h-4 text-white" />
@@ -260,7 +233,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
       )}
 
       {/* Interactive Confidence Threshold */}
-      <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-8">
+      <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-8">
         <div className="flex items-center space-x-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
             <TrendingUp className="w-5 h-5 text-white" />
@@ -275,7 +248,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
         </div>
 
-        <div className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl p-6">
+        <div className="bg-gray-100 border border-white/10 rounded-2xl p-6">
           <Slider
             label={language === 'fr' ? "Seuil de confiance minimum" : "Minimum confidence threshold"}
             value={confidenceThreshold}
@@ -296,7 +269,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
       {confidenceAnalysis && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* High-Confidence Count */}
-          <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-white" />
             </div>
@@ -316,7 +289,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* Coverage Percentage */}
-          <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-4">
               <Target className="w-8 h-8 text-white" />
             </div>
@@ -336,7 +309,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* High-Confidence Accuracy */}
-          <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-4">
               <TrendingUp className="w-8 h-8 text-white" />
             </div>
@@ -356,7 +329,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* Precision Improvement */}
-          <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-white" />
             </div>
@@ -379,7 +352,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
 
       {/* High-Confidence Confusion Matrix */}
       {confidenceAnalysis && confidenceAnalysis.high_confidence_count > 0 && (
-        <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6">
+        <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6">
           <div className="flex items-center space-x-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
               <Target className="w-5 h-5 text-white" />
@@ -437,7 +410,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           
           {/* Comparison with Overall Performance */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="backdrop-blur-sm bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-2xl p-4">
+            <div className="backdrop-blur-xs shadow-lg bg-gray-100 border border-blue-500/20 rounded-2xl p-4">
               <h4 className="text-sm font-semibold text-blue-800 mb-2">
                 {language === 'fr' ? '📊 Performance Globale' : '📊 Overall Performance'}
               </h4>
@@ -452,7 +425,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
               </p>
             </div>
             
-            <div className="backdrop-blur-sm bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-2xl p-4">
+            <div className="backdrop-blur-xs shadow-lg bg-gray-100 border border-purple-500/20 rounded-2xl p-4">
               <h4 className="text-sm font-semibold text-purple-800 mb-2">
                 {language === 'fr' ? '🎯 Performance Filtrée' : '🎯 Filtered Performance'}
               </h4>
@@ -470,237 +443,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
         </div>
       )}
 
-      {/* Confidence Filtering Insights Section */}
-      {confidenceAnalysis && (
-        <div className="backdrop-blur-sm bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-3xl p-8">
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center">
-              <span className="text-white text-xl">💡</span>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-800">
-                {language === 'fr' ? 'Insights Stratégiques' : 'Strategic Insights'}
-              </h3>
-              <p className="text-gray-600">
-                {language === 'fr' ? 'Valeur du filtrage par confiance' : 'Value of confidence filtering'}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* Dynamic Strategy Explanation */}
-            <div className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                {language === 'fr' ? '🎯 Stratégie de Filtrage Adaptatif' : '🎯 Adaptive Filtering Strategy'}
-              </h4>
-              
-              {confidenceAnalysis.high_confidence_count > 0 ? (
-                <div className="space-y-4">
-                  <p className="text-gray-700 leading-relaxed">
-                    {language === 'fr' 
-                      ? `Avec un seuil de confiance de ${(confidenceThreshold * 100).toFixed(0)}%, nous filtrons ${confidenceAnalysis.coverage_percentage.toFixed(1)}% du dataset pour obtenir une précision de ${(confidenceAnalysis.high_confidence_accuracy * 100).toFixed(1)}%.`
-                      : `With a confidence threshold of ${(confidenceThreshold * 100).toFixed(0)}%, we filter ${confidenceAnalysis.coverage_percentage.toFixed(1)}% of the dataset to achieve ${(confidenceAnalysis.high_confidence_accuracy * 100).toFixed(1)}% accuracy.`
-                    }
-                  </p>
-                  
-                  {/* Precision Improvement Indicator */}
-                  <div className="flex items-center space-x-3 p-4 backdrop-blur-sm bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">
-                        {language === 'fr' ? 'Amélioration de la Précision pour Classe 0' : 'Class 0 Precision Improvement'}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {language === 'fr' 
-                          ? `+${confidenceAnalysis.precision_improvement.toFixed(1)}% par rapport au modèle global`
-                          : `+${confidenceAnalysis.precision_improvement.toFixed(1)}% vs overall model`
-                        }
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-purple-600">
-                        {confidenceAnalysis.class_breakdown.class_0.total > 0 
-                          ? `${(confidenceAnalysis.class_breakdown.class_0.accuracy * 100).toFixed(1)}%`
-                          : 'N/A'
-                        }
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {language === 'fr' ? 'Précision Classe 0' : 'Class 0 Precision'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Strategic Value Explanation */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    <div className="backdrop-blur-sm bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4">
-                      <h5 className="text-sm font-semibold text-blue-800 mb-2">
-                        {language === 'fr' ? '📈 Avantage Commercial' : '📈 Business Advantage'}
-                      </h5>
-                      <p className="text-xs text-gray-700 leading-relaxed">
-                        {language === 'fr' 
-                          ? "En se concentrant sur les prédictions haute confiance, nous créons un système d'alerte précoce fiable pour identifier les actions à risque élevé."
-                          : "By focusing on high-confidence predictions, we create a reliable early warning system for identifying high-risk stocks."
-                        }
-                      </p>
-                    </div>
-                    
-                    <div className="backdrop-blur-sm bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl p-4">
-                      <h5 className="text-sm font-semibold text-orange-800 mb-2">
-                        {language === 'fr' ? '⚖️ Compromis Couverture-Précision' : '⚖️ Coverage-Precision Trade-off'}
-                      </h5>
-                      <p className="text-xs text-gray-700 leading-relaxed">
-                        {language === 'fr' 
-                          ? `Nous sacrifions ${(100 - confidenceAnalysis.coverage_percentage).toFixed(1)}% de couverture pour gagner ${confidenceAnalysis.precision_improvement.toFixed(1)}% de précision.`
-                          : `We sacrifice ${(100 - confidenceAnalysis.coverage_percentage).toFixed(1)}% coverage to gain ${confidenceAnalysis.precision_improvement.toFixed(1)}% precision.`
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center mx-auto mb-4">
-                    <AlertTriangle className="w-8 h-8 text-orange-600" />
-                  </div>
-                  <h5 className="text-lg font-semibold text-orange-800 mb-2">
-                    {language === 'fr' ? 'Seuil Trop Restrictif' : 'Threshold Too Restrictive'}
-                  </h5>
-                  <p className="text-orange-700 text-sm mb-4">
-                    {language === 'fr' 
-                      ? "Aucune prédiction n'atteint ce niveau de confiance. Réduisez le seuil pour voir les insights."
-                      : "No predictions reach this confidence level. Lower the threshold to see insights."
-                    }
-                  </p>
-                  <div className="text-xs text-gray-600">
-                    {language === 'fr' 
-                      ? "Essayez un seuil entre 50% et 80% pour des résultats optimaux"
-                      : "Try a threshold between 50% and 80% for optimal results"
-                    }
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Educational Content */}
-            <div className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                {language === 'fr' ? '🎓 Comprendre le Filtrage par Confiance' : '🎓 Understanding Confidence Filtering'}
-              </h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-white text-lg">🎯</span>
-                  </div>
-                  <h5 className="text-sm font-semibold text-gray-800 mb-2">
-                    {language === 'fr' ? 'Haute Précision' : 'High Precision'}
-                  </h5>
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    {language === 'fr' 
-                      ? "Les prédictions haute confiance sont plus fiables pour les décisions critiques"
-                      : "High-confidence predictions are more reliable for critical decisions"
-                    }
-                  </p>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-white text-lg">📊</span>
-                  </div>
-                  <h5 className="text-sm font-semibold text-gray-800 mb-2">
-                    {language === 'fr' ? 'Couverture Réduite' : 'Reduced Coverage'}
-                  </h5>
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    {language === 'fr' 
-                      ? "Moins d'actions analysées mais avec une confiance maximale"
-                      : "Fewer stocks analyzed but with maximum confidence"
-                    }
-                  </p>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-white text-lg">⚖️</span>
-                  </div>
-                  <h5 className="text-sm font-semibold text-gray-800 mb-2">
-                    {language === 'fr' ? 'Équilibre Optimal' : 'Optimal Balance'}
-                  </h5>
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    {language === 'fr' 
-                      ? "Ajustez le seuil selon vos besoins de précision vs couverture"
-                      : "Adjust threshold based on your precision vs coverage needs"
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Dynamic Recommendations */}
-            {confidenceAnalysis.high_confidence_count > 0 && (
-              <div className="backdrop-blur-sm bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-2xl p-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                  {language === 'fr' ? '💼 Recommandations Stratégiques' : '💼 Strategic Recommendations'}
-                </h4>
-                
-                <div className="space-y-3">
-                  {confidenceAnalysis.coverage_percentage > 20 && confidenceAnalysis.high_confidence_accuracy > 0.8 && (
-                    <div className="flex items-start space-x-3 p-3 backdrop-blur-sm bg-green-500/10 border border-green-500/20 rounded-xl">
-                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-green-800">
-                          {language === 'fr' ? 'Configuration Optimale' : 'Optimal Configuration'}
-                        </p>
-                        <p className="text-xs text-green-700">
-                          {language === 'fr' 
-                            ? "Excellent équilibre entre précision et couverture pour un système d'alerte fiable."
-                            : "Excellent balance between precision and coverage for a reliable alert system."
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {confidenceAnalysis.coverage_percentage < 10 && (
-                    <div className="flex items-start space-x-3 p-3 backdrop-blur-sm bg-orange-500/10 border border-orange-500/20 rounded-xl">
-                      <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-orange-800">
-                          {language === 'fr' ? 'Couverture Limitée' : 'Limited Coverage'}
-                        </p>
-                        <p className="text-xs text-orange-700">
-                          {language === 'fr' 
-                            ? "Considérez réduire le seuil pour augmenter la couverture du système."
-                            : "Consider lowering the threshold to increase system coverage."
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {confidenceAnalysis.precision_improvement > 15 && (
-                    <div className="flex items-start space-x-3 p-3 backdrop-blur-sm bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                      <TrendingUp className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-blue-800">
-                          {language === 'fr' ? 'Amélioration Significative' : 'Significant Improvement'}
-                        </p>
-                        <p className="text-xs text-blue-700">
-                          {language === 'fr' 
-                            ? "Le filtrage par confiance apporte une valeur ajoutée substantielle."
-                            : "Confidence filtering provides substantial added value."
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+      
         </div>
-      )}
-    </div>
   );
 }

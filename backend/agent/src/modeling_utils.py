@@ -382,6 +382,7 @@ def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]
             'probabilities': y_pred_proba.tolist(),
             'test_indices': test_indices,
             'true_labels': y_test.tolist(),  # Add true labels for confidence analysis
+            'hyperparameters': hyperparameters,  # Store hyperparameters for SHAP analysis cache key
             'data_info': {
                 'data_path': data_path,
                 'n_features': len(feature_cols),
@@ -416,6 +417,12 @@ def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]
         
         logger.info(f"Model training completed successfully. Accuracy: {accuracy:.4f}, Training time: {training_time:.2f}s")
         logger.info(f"Results cached with key: {cache_key}")
+        logger.info(f"Cache state after training:")
+        logger.info(f"  - Cached models: {list(_cached_models.keys())}")
+        logger.info(f"  - Cached test data: {list(_cached_test_data.keys())}")
+        logger.info(f"  - Model object type: {type(model)}")
+        logger.info(f"  - X_test shape: {X_test.shape}")
+        logger.info(f"  - y_test shape: {y_test.shape}")
         
         return result
         
@@ -574,13 +581,355 @@ MAX_CACHE_SIZE = 10
 
 def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int], session_id: str = None) -> Dict[str, Any]:
     """
-    Perform SHAP analysis on model predictions with session-based caching
+    Perform real SHAP analysis on model predictions using the trained model
     """
     try:
         logger.info(f"Starting SHAP analysis for {len(error_indices)} error cases")
         
-        # For a complete implementation, we would need the trained model and test data
-        # This implementation provides realistic SHAP-like analysis based on feature importance
+        # Clean up expired cache first
+        _cleanup_expired_cache()
+        
+        # Get model metadata to find the cached model
+        hyperparameters = model_results.get('hyperparameters', {})
+        logger.info(f"Extracted hyperparameters from model_results: {hyperparameters}")
+        logger.info(f"Model results keys: {list(model_results.keys())}")
+        
+        # If no hyperparameters, try to use any available cached model
+        if not hyperparameters:
+            logger.warning("No hyperparameters found in model_results, will try to find any available cached model")
+        
+        cache_key = _get_cache_key(hyperparameters)
+        logger.info(f"Generated cache key from hyperparameters: {cache_key}")
+        
+        # Debug cache state
+        logger.info(f"Cache state debug:")
+        logger.info(f"  - Total cached models: {len(_cached_models)}")
+        logger.info(f"  - Total cached test data: {len(_cached_test_data)}")
+        logger.info(f"  - Total cache timestamps: {len(_cache_timestamps)}")
+        
+        # Check cache timestamps to see if anything expired
+        current_time = pd.Timestamp.now()
+        for key, timestamp in _cache_timestamps.items():
+            age_minutes = (current_time - timestamp).total_seconds() / 60
+            logger.info(f"  - Cache key {key}: age {age_minutes:.1f} minutes")
+        
+        # Debug logging
+        logger.info(f"SHAP Analysis Debug:")
+        logger.info(f"  - Hyperparameters: {hyperparameters}")
+        logger.info(f"  - Generated cache key: {cache_key}")
+        logger.info(f"  - Available cached models: {list(_cached_models.keys())}")
+        logger.info(f"  - Available test data: {list(_cached_test_data.keys())}")
+        
+        # Check if we have the trained model cached
+        if cache_key not in _cached_models:
+            logger.warning(f"Trained model not found in cache for key: {cache_key}")
+            logger.warning(f"Available cache keys: {list(_cached_models.keys())}")
+            
+            # Try to find a matching cache key by checking all available keys
+            matching_key = None
+            test_data_keys = [key for key in _cached_test_data.keys() if key.startswith("test_data_")]
+            
+            for test_data_key in test_data_keys:
+                # Extract the model cache key from test data key
+                model_cache_key = test_data_key.replace("test_data_", "")
+                if model_cache_key in _cached_models:
+                    logger.info(f"Found matching cached model and test data: {model_cache_key}")
+                    matching_key = model_cache_key
+                    cache_key = matching_key  # Use the found key
+                    break
+            
+            if not matching_key:
+                logger.warning("No matching cached model found")
+                logger.warning(f"Available model cache keys: {list(_cached_models.keys())}")
+                logger.warning(f"Available test data keys: {list(_cached_test_data.keys())}")
+                
+                # Try to re-train the model if we have hyperparameters
+                if hyperparameters:
+                    logger.info("Attempting to re-train model for SHAP analysis")
+                    try:
+                        # Re-train the model with the same hyperparameters
+                        training_result = train_random_forest_model(hyperparameters)
+                        if 'error' not in training_result:
+                            logger.info("Model re-trained successfully, retrying SHAP analysis")
+                            # Update cache_key to the newly trained model
+                            cache_key = _get_cache_key(hyperparameters)
+                            if cache_key in _cached_models:
+                                logger.info("Found newly trained model in cache, proceeding with SHAP analysis")
+                            else:
+                                logger.error("Model re-training succeeded but model not found in cache")
+                                return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+                        else:
+                            logger.error(f"Model re-training failed: {training_result['error']}")
+                            return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+                    except Exception as e:
+                        logger.error(f"Error during model re-training: {e}")
+                        return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+                else:
+                    logger.warning("No hyperparameters available for re-training, falling back to feature importance analysis")
+                    return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+        
+        # Get cached model and test data
+        test_data_key = f"test_data_{cache_key}"
+        if test_data_key not in _cached_test_data:
+            logger.warning(f"Test data not found in cache for key: {test_data_key}")
+            return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+        
+        cached_test_data = _cached_test_data[test_data_key]
+        model = cached_test_data.get('model')  # Model is stored in test data cache
+        X_test = cached_test_data.get('X_test')
+        y_test = cached_test_data.get('y_test')
+        
+        # Debug what's in the cache
+        logger.info(f"Cache Debug:")
+        logger.info(f"  - cached_test_data keys: {list(cached_test_data.keys()) if cached_test_data else 'None'}")
+        logger.info(f"  - model type: {type(model)}")
+        logger.info(f"  - X_test type: {type(X_test)}")
+        logger.info(f"  - y_test type: {type(y_test)}")
+        logger.info(f"  - X_test shape: {X_test.shape if X_test is not None else 'None'}")
+        logger.info(f"  - y_test shape: {y_test.shape if y_test is not None else 'None'}")
+        
+        if model is None or X_test is None:
+            logger.warning("Model or test data is None, falling back to feature importance analysis")
+            return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+        
+        logger.info(f"Using real SHAP analysis with cached model and test data")
+        
+        # Initialize SHAP explainer
+        try:
+            explainer = shap.TreeExplainer(model)
+            logger.info("SHAP TreeExplainer initialized successfully")
+            logger.info(f"Model classes: {model.classes_}")
+            logger.info(f"Model n_classes_: {model.n_classes_}")
+            logger.info(f"Model n_features_in_: {model.n_features_in_}")
+        except Exception as e:
+            logger.error(f"Failed to initialize SHAP explainer: {e}")
+            return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+        
+        # Perform SHAP analysis on error cases
+        shap_results = []
+        
+        for i, idx in enumerate(error_indices[:5]):  # Limit to first 5 error cases for performance
+            if idx >= len(X_test):
+                logger.warning(f"Error index {idx} out of range for test data (size: {len(X_test)}), skipping")
+                continue
+            
+            try:
+                # Get the specific test sample
+                sample = X_test.iloc[idx:idx+1]
+                true_label = int(y_test.iloc[idx])
+                
+                # Get model prediction for this sample
+                prediction = int(model.predict(sample)[0])
+                prediction_proba = model.predict_proba(sample)[0]
+                confidence = float(np.max(prediction_proba))
+                
+                # Calculate SHAP values for this sample
+                shap_values = explainer.shap_values(sample)
+                
+                # Also get a test prediction to understand the model output structure
+                test_pred = model.predict_proba(sample)
+                logger.info(f"Test prediction shape: {test_pred.shape}, values: {test_pred}")
+                
+                logger.info(f"SHAP values debug for sample {idx}:")
+                logger.info(f"  - shap_values type: {type(shap_values)}")
+                logger.info(f"  - shap_values shape/length: {shap_values.shape if hasattr(shap_values, 'shape') else len(shap_values) if isinstance(shap_values, list) else 'unknown'}")
+                logger.info(f"  - Expected features: {len(X_test.columns)}")
+                logger.info(f"  - Feature names: {list(X_test.columns)}")
+                
+                # For binary classification with TreeExplainer, handle different return formats
+                if isinstance(shap_values, list):
+                    logger.info(f"  - shap_values is list with {len(shap_values)} elements")
+                    for i, sv in enumerate(shap_values):
+                        logger.info(f"    - Element {i} shape: {np.array(sv).shape}")
+                    
+                    if len(shap_values) == 2:
+                        # Two classes - use class 1 values (positive class)
+                        shap_vals_class1 = np.array(shap_values[1]).flatten()
+                        logger.info(f"  - Using class 1 values, shape: {shap_vals_class1.shape}")
+                    else:
+                        # Single class or other structure
+                        shap_vals_class1 = np.array(shap_values[0]).flatten()
+                        logger.info(f"  - Using first element, shape: {shap_vals_class1.shape}")
+                else:
+                    # Direct numpy array - handle 3D case (1, n_features, n_classes)
+                    if len(shap_values.shape) == 3:
+                        logger.info(f"  - 3D SHAP values shape: {shap_values.shape}")
+                        # For binary classification, SHAP values for both classes should sum to 0
+                        # We want the values that explain the prediction toward class 1
+                        shap_vals_class0 = shap_values[0, :, 0]  # [sample, features, class_0]
+                        shap_vals_class1 = shap_values[0, :, 1]  # [sample, features, class_1]
+                        
+                        logger.info(f"  - Class 0 SHAP values: {shap_vals_class0}")
+                        logger.info(f"  - Class 1 SHAP values: {shap_vals_class1}")
+                        logger.info(f"  - Sum class 0: {np.sum(shap_vals_class0)}")
+                        logger.info(f"  - Sum class 1: {np.sum(shap_vals_class1)}")
+                        logger.info(f"  - Sum both classes: {np.sum(shap_vals_class0) + np.sum(shap_vals_class1)}")
+                        
+                        # Use class 1 values (positive class)
+                        shap_vals_class1 = shap_vals_class1
+                        logger.info(f"  - Using class 1 values, shape: {shap_vals_class1.shape}")
+                    else:
+                        # Flatten for other cases
+                        shap_vals_class1 = np.array(shap_values).flatten()
+                        logger.info(f"  - Direct array flattened, shape: {shap_vals_class1.shape}")
+                
+                # Ensure we have the right number of features
+                if len(shap_vals_class1) != len(X_test.columns):
+                    logger.error(f"SHAP values length {len(shap_vals_class1)} doesn't match features {len(X_test.columns)}")
+                    logger.error(f"This suggests a mismatch between the model training data and test data")
+                    logger.error(f"SHAP values shape: {shap_vals_class1.shape}")
+                    logger.error(f"Expected features: {list(X_test.columns)}")
+                    
+                    # Try to handle the case where we have double the features (might be for both classes)
+                    if len(shap_vals_class1) == 2 * len(X_test.columns):
+                        logger.info("Detected double features - likely SHAP values for both classes concatenated")
+                        logger.info("Attempting to extract second half of SHAP values (class 1)")
+                        shap_vals_class1 = shap_vals_class1[len(X_test.columns):]
+                        if len(shap_vals_class1) == len(X_test.columns):
+                            logger.info("Successfully extracted matching SHAP values for class 1")
+                        else:
+                            logger.error("Still mismatched after extraction, skipping sample")
+                            continue
+                    else:
+                        logger.error("Cannot resolve SHAP values mismatch, skipping sample")
+                        continue
+                
+                # Get base value (expected value)
+                expected_value = explainer.expected_value
+                logger.info(f"Expected value debug:")
+                logger.info(f"  - expected_value type: {type(expected_value)}")
+                logger.info(f"  - expected_value: {expected_value}")
+                
+                if isinstance(expected_value, (list, np.ndarray)):
+                    logger.info(f"  - expected_value length: {len(expected_value)}")
+                    if len(expected_value) > 1:
+                        base_value = float(expected_value[1])  # Use class 1 expected value
+                        logger.info(f"  - Using class 1 expected value: {base_value}")
+                    else:
+                        base_value = float(expected_value[0])
+                        logger.info(f"  - Using single expected value: {base_value}")
+                else:
+                    base_value = float(expected_value)
+                    logger.info(f"  - Using scalar expected value: {base_value}")
+                
+                # The expected value should be in probability space for RandomForest
+                # No conversion needed, but let's verify it makes sense
+                logger.info(f"  - Base value is in probability space: {base_value}")
+                
+                # Verify the base value makes sense (should be close to the class distribution)
+                if base_value < 0 or base_value > 1:
+                    logger.warning(f"  - Base value {base_value} is outside [0,1], this might indicate an issue")
+                    # For RandomForest, expected values should be probabilities
+                    base_value = max(0, min(1, base_value))
+                    logger.info(f"  - Clamped base value to: {base_value}")
+                
+                # Log the final SHAP values we're using
+                logger.info(f"Final SHAP values for class 1: {shap_vals_class1}")
+                logger.info(f"Sum of SHAP values: {np.sum(shap_vals_class1)}")
+                logger.info(f"Base value: {base_value}")
+                logger.info(f"Expected final prediction: {base_value + np.sum(shap_vals_class1)}")
+                logger.info(f"Actual model prediction probability: {prediction_proba[1]}")
+                
+                # Create SHAP results with feature names
+                feature_names = X_test.columns.tolist()
+                shap_feature_values = []
+                
+                for j, (feature_name, shap_val) in enumerate(zip(feature_names, shap_vals_class1)):
+                    # Get display name from feature importances if available
+                    display_name = feature_name
+                    feature_importances = model_results.get('feature_importances', [])
+                    for feat_info in feature_importances:
+                        if feat_info['feature'] == feature_name:
+                            display_name = feat_info.get('display_name', feature_name)
+                            break
+                    
+                    # Safely convert values to Python scalars
+                    try:
+                        shap_value = float(shap_val)
+                        feature_value = float(sample.iloc[0, j])
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Error converting values for feature {feature_name}: {e}")
+                        continue
+                    
+                    shap_feature_values.append({
+                        'feature': feature_name,
+                        'value': shap_value,
+                        'display_name': display_name,
+                        'feature_value': feature_value
+                    })
+                
+                # Sort by absolute SHAP value
+                shap_feature_values.sort(key=lambda x: abs(x['value']), reverse=True)
+                
+                # Calculate prediction value
+                prediction_value = float(base_value + sum(sv['value'] for sv in shap_feature_values))
+                
+                # Create company info
+                company_info = f"Company_{idx:03d}"
+                
+                shap_results.append({
+                    'index': str(idx),
+                    'true_label': int(true_label),
+                    'predicted_label': int(prediction),
+                    'confidence': confidence,
+                    'company_info': company_info,
+                    'shap_values': shap_feature_values,
+                    'base_value': base_value,
+                    'prediction_value': prediction_value,
+                    'is_real_shap': True  # Flag to indicate this is real SHAP analysis
+                })
+                
+                logger.info(f"SHAP analysis completed for sample {idx}: true={true_label}, pred={prediction}, conf={confidence:.3f}")
+                
+            except Exception as e:
+                logger.error(f"Error analyzing sample {idx} with SHAP: {e}")
+                continue
+        
+        if not shap_results:
+            logger.warning("No SHAP results generated, falling back to feature importance analysis")
+            return _perform_feature_importance_analysis(model_results, error_indices, session_id)
+        
+        # Generate insights about risky company archetype
+        archetype_insights = _generate_archetype_insights(shap_results)
+        
+        # Cache results for session if session_id provided
+        if session_id:
+            shap_cache_key = f"shap_{session_id}"
+            _cached_shap_results[shap_cache_key] = {
+                'error_cases': shap_results,
+                'archetype_insights': archetype_insights,
+                'timestamp': pd.Timestamp.now()
+            }
+            _cache_timestamps[shap_cache_key] = pd.Timestamp.now()
+            _manage_cache_size()
+            logger.info(f"Real SHAP results cached for session {session_id}")
+        
+        result = {
+            'error_cases': shap_results,
+            'archetype_insights': archetype_insights,
+            'analysis_summary': {
+                'total_cases_analyzed': len(shap_results),
+                'features_analyzed': len(shap_feature_values) if shap_results else 0,
+                'session_id': session_id,
+                'analysis_timestamp': pd.Timestamp.now().isoformat(),
+                'analysis_type': 'real_shap'
+            }
+        }
+        
+        logger.info(f"Real SHAP analysis completed for {len(shap_results)} cases")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in SHAP analysis: {str(e)}", exc_info=True)
+        return {'error': str(e)}
+
+def _perform_feature_importance_analysis(model_results: Dict[str, Any], error_indices: List[int], session_id: str = None) -> Dict[str, Any]:
+    """
+    Fallback analysis using feature importance when real SHAP analysis is not available
+    """
+    try:
+        logger.warning(f"FALLBACK: Performing feature importance-based analysis for {len(error_indices)} error cases")
+        logger.warning("This is NOT real SHAP analysis - using simulated values based on feature importance")
         
         feature_importances = model_results.get('feature_importances', [])
         predictions = model_results.get('predictions', [])
@@ -633,7 +982,8 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 shap_values.append({
                     'feature': feat_info['feature'],
                     'value': float(contribution),
-                    'display_name': feat_info['display_name']
+                    'display_name': feat_info['display_name'],
+                    'is_simulated': True
                 })
             
             # Normalize contributions to match prediction probability
@@ -657,7 +1007,8 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 'company_info': company_info,
                 'shap_values': shap_values,
                 'base_value': base_value,
-                'prediction_value': base_value + sum(sv['value'] for sv in shap_values)
+                'prediction_value': base_value + sum(sv['value'] for sv in shap_values),
+                'is_real_shap': False  # Flag to indicate this is simulated
             })
         
         # Generate insights about risky company archetype
@@ -673,7 +1024,7 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
             }
             _cache_timestamps[shap_cache_key] = pd.Timestamp.now()
             _manage_cache_size()
-            logger.info(f"SHAP results cached for session {session_id}")
+            logger.info(f"Simulated SHAP results cached for session {session_id}")
         
         result = {
             'error_cases': shap_results,
@@ -682,15 +1033,16 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 'total_cases_analyzed': len(shap_results),
                 'features_analyzed': len(feature_importances),
                 'session_id': session_id,
-                'analysis_timestamp': pd.Timestamp.now().isoformat()
+                'analysis_timestamp': pd.Timestamp.now().isoformat(),
+                'analysis_type': 'feature_importance_based'
             }
         }
         
-        logger.info(f"SHAP analysis completed for {len(shap_results)} cases")
+        logger.info(f"Feature importance-based analysis completed for {len(shap_results)} cases")
         return result
         
     except Exception as e:
-        logger.error(f"Error in SHAP analysis: {str(e)}", exc_info=True)
+        logger.error(f"Error in feature importance analysis: {str(e)}", exc_info=True)
         return {'error': str(e)}
 
 def _generate_archetype_insights(shap_results: List[Dict[str, Any]]) -> Dict[str, Any]:

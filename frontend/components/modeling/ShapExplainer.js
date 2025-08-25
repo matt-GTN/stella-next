@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import PlotlyChart from "./PlotlyChart";
-import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw } from "lucide-react";
+import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw, CheckCircle } from "lucide-react";
 
 export default function ShapExplainer({ modelResults, language }) {
   const [selectedErrorCase, setSelectedErrorCase] = useState(null);
@@ -21,18 +21,17 @@ export default function ShapExplainer({ modelResults, language }) {
         const prediction = modelResults.predictions[i];
         const probabilities = modelResults.probabilities[i];
         const maxProb = Math.max(...probabilities);
-        const actualLabel = i < modelResults.predictions.length ?
-          (modelResults.predictions[i] === 1 ? 0 : 1) : // Simulate actual labels for demo
-          Math.round(Math.random());
+        const actualLabel = modelResults.true_labels ? modelResults.true_labels[i] :
+          (modelResults.predictions[i] === 1 ? 0 : 1); // Fallback if no true labels
 
         // Find high-confidence mistakes
         if (maxProb >= confidenceThreshold && prediction !== actualLabel) {
           errors.push({
-            index: modelResults.test_indices[i] || `case_${i}`,
+            index: i, // Use array index, not test_indices value
             predicted_label: prediction,
             true_label: actualLabel,
             confidence: maxProb,
-            company_info: `Company ${i + 1}` // Placeholder - would come from backend
+            company_info: modelResults.test_indices[i] || `Company ${i + 1}` // Use test_indices for display
           });
         }
       }
@@ -51,16 +50,28 @@ export default function ShapExplainer({ modelResults, language }) {
     setShapError(null);
 
     try {
+      // Get all error indices for batch analysis
+      const allErrorIndices = errorCases.map(ec => ec.index); // Already integers, no need to parse
+
+      console.log('SHAP Analysis Request:', {
+        action: 'shap-analysis',
+        error_indices: allErrorIndices,
+        model_results_keys: Object.keys(modelResults || {}),
+        has_hyperparameters: !!(modelResults?.hyperparameters)
+      });
+
       const response = await fetch('/api/modeling', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'shap_analysis',
-          case_index: errorCase.index,
-          predicted_label: errorCase.predicted_label,
-          true_label: errorCase.true_label
+          action: 'shap-analysis',
+          model_results: {
+            ...modelResults,
+            hyperparameters: modelResults.hyperparameters || modelResults.data_info?.hyperparameters
+          },
+          error_indices: allErrorIndices
         })
       });
 
@@ -71,49 +82,61 @@ export default function ShapExplainer({ modelResults, language }) {
       }
 
       if (result.success && result.data) {
-        setShapAnalysis(result.data);
+        // Find the specific case we're analyzing
+        const selectedCaseData = result.data.error_cases?.find(
+          case_data => case_data.index === errorCase.index.toString()
+        );
+
+        if (selectedCaseData) {
+          setShapAnalysis({
+            shap_values: selectedCaseData.shap_values,
+            base_value: selectedCaseData.base_value,
+            prediction_value: selectedCaseData.prediction_value,
+            is_real_shap: selectedCaseData.is_real_shap,
+            analysis_type: result.data.analysis_summary?.analysis_type
+          });
+        } else {
+          // If specific case not found, use the first available case as fallback
+          const firstCase = result.data.error_cases?.[0];
+          if (firstCase) {
+            console.log('Using first available SHAP case as fallback');
+            setShapAnalysis({
+              shap_values: firstCase.shap_values,
+              base_value: firstCase.base_value,
+              prediction_value: firstCase.prediction_value,
+              is_real_shap: firstCase.is_real_shap,
+              analysis_type: result.data.analysis_summary?.analysis_type
+            });
+          } else {
+            throw new Error('No SHAP analysis results found');
+          }
+        }
       } else {
         throw new Error('Invalid SHAP response from server');
       }
 
     } catch (err) {
-      console.error('SHAP analysis error:', err);
-      
+      console.error('SHAP analysis error:', err.message || err);
+
       // Enhanced error handling with specific error types
       let errorMessage;
-      if (err.message.includes('fetch') || err.message.includes('NetworkError')) {
-        errorMessage = language === 'fr' 
+      if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError'))) {
+        errorMessage = language === 'fr'
           ? 'Impossible de se connecter au serveur pour l\'analyse SHAP.'
           : 'Cannot connect to server for SHAP analysis.';
-      } else if (err.message.includes('timeout') || err.name === 'AbortError') {
-        errorMessage = language === 'fr' 
+      } else if (err.message && (err.message.includes('timeout') || err.name === 'AbortError')) {
+        errorMessage = language === 'fr'
           ? 'L\'analyse SHAP a pris trop de temps. Réessayez.'
           : 'SHAP analysis timed out. Please try again.';
       } else {
-        errorMessage = language === 'fr' 
-          ? `Erreur lors de l'analyse SHAP: ${err.message}`
-          : `SHAP analysis error: ${err.message}`;
+        errorMessage = language === 'fr'
+          ? `Erreur lors de l'analyse SHAP: ${err.message || 'Erreur inconnue'}`
+          : `SHAP analysis error: ${err.message || 'Unknown error'}`;
       }
-      
+
       setShapError(errorMessage);
 
-      // Provide mock SHAP data for demonstration with error notice
-      const mockShapData = {
-        shap_values: [
-          { feature: 'revenuePerShare_YoY_Growth', value: -0.15, display_name: language === 'fr' ? 'Croissance Revenus/Action YoY' : 'Revenue/Share YoY Growth' },
-          { feature: 'operatingMargin', value: -0.12, display_name: language === 'fr' ? 'Marge Opérationnelle' : 'Operating Margin' },
-          { feature: 'returnOnEquity', value: -0.08, display_name: language === 'fr' ? 'Rendement des Capitaux Propres' : 'Return on Equity' },
-          { feature: 'debtToEquity', value: 0.10, display_name: language === 'fr' ? 'Ratio Dette/Capitaux' : 'Debt to Equity' },
-          { feature: 'currentRatio', value: -0.06, display_name: language === 'fr' ? 'Ratio de Liquidité' : 'Current Ratio' },
-          { feature: 'priceToBook', value: 0.05, display_name: language === 'fr' ? 'Ratio Prix/Valeur Comptable' : 'Price to Book' },
-          { feature: 'grossMargin', value: -0.04, display_name: language === 'fr' ? 'Marge Brute' : 'Gross Margin' },
-          { feature: 'netMargin', value: -0.03, display_name: language === 'fr' ? 'Marge Nette' : 'Net Margin' }
-        ].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)),
-        base_value: 0.27,
-        prediction_value: 0.73,
-        is_mock_data: true
-      };
-      setShapAnalysis(mockShapData);
+      // Don't throw the error - just set the error state for display
     } finally {
       setIsLoadingShap(false);
     }
@@ -276,6 +299,22 @@ export default function ShapExplainer({ modelResults, language }) {
               : "SHAP analysis reveals which financial characteristics contributed most to incorrect high-confidence predictions. This helps us identify the archetype of companies the model confuses."
             }
           </p>
+          {shapAnalysis && (
+            <div className={`mt-3 p-2 rounded-lg text-xs ${shapAnalysis.is_real_shap
+              ? 'bg-green-500/10 text-green-800'
+              : 'bg-yellow-500/10 text-yellow-800'
+              }`}>
+              {shapAnalysis.is_real_shap ? (
+                language === 'fr'
+                  ? "✓ Utilise l'analyse SHAP réelle du modèle entraîné"
+                  : "✓ Using real SHAP analysis from trained model"
+              ) : (
+                language === 'fr'
+                  ? "⚠ Utilise une analyse basée sur l'importance des features (modèle non disponible)"
+                  : "⚠ Using feature importance-based analysis (trained model not available)"
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -440,16 +479,33 @@ export default function ShapExplainer({ modelResults, language }) {
             )}
           </button>
 
-          {shapError && (
-            <div className="ml-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+          {shapAnalysis && (
+            <div className={`ml-4 p-3 rounded-xl ${shapAnalysis.is_real_shap
+              ? 'bg-green-500/10 border border-green-500/20'
+              : 'bg-yellow-500/10 border border-yellow-500/20'
+              }`}>
               <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                <span className="text-xs text-yellow-800">
-                  {language === 'fr'
-                    ? 'Utilisation de données de démonstration'
-                    : 'Using demonstration data'
-                  }
-                </span>
+                {shapAnalysis.is_real_shap ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-xs text-green-800">
+                      {language === 'fr'
+                        ? 'Analyse SHAP réelle'
+                        : 'Real SHAP analysis'
+                      }
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                    <span className="text-xs text-yellow-800">
+                      {language === 'fr'
+                        ? 'Analyse basée sur l\'importance des features'
+                        : 'Feature importance-based analysis'
+                      }
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -570,305 +626,10 @@ export default function ShapExplainer({ modelResults, language }) {
                 </div>
               </div>
             </div>
-
-            {/* SHAP Interpretation */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/20 rounded-2xl p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">↓</span>
-                  </div>
-                  <h4 className="text-sm font-semibold text-green-800">
-                    {language === 'fr' ? 'Facteurs Protecteurs' : 'Protective Factors'}
-                  </h4>
-                </div>
-                <p className="text-xs text-gray-700 leading-relaxed">
-                  {language === 'fr'
-                    ? "Les barres vertes montrent les caractéristiques qui réduisent le risque prédit. Ces facteurs ont poussé le modèle vers une prédiction plus sûre."
-                    : "Green bars show characteristics that reduce predicted risk. These factors pushed the model toward a safer prediction."
-                  }
-                </p>
-              </div>
-
-              <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">↑</span>
-                  </div>
-                  <h4 className="text-sm font-semibold text-red-800">
-                    {language === 'fr' ? 'Facteurs de Risque' : 'Risk Factors'}
-                  </h4>
-                </div>
-                <p className="text-xs text-gray-700 leading-relaxed">
-                  {language === 'fr'
-                    ? "Les barres rouges indiquent les caractéristiques qui augmentent le risque prédit. Ces facteurs ont contribué à la prédiction incorrecte."
-                    : "Red bars indicate characteristics that increase predicted risk. These factors contributed to the incorrect prediction."
-                  }
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Archetype Insights Display */}
-      {shapAnalysis && (
-        <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center">
-              <Lightbulb className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-800">
-                {language === 'fr' ? 'Archétype de l\'Entreprise à Risque' : 'Risky Company Archetype'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {language === 'fr'
-                  ? 'Profil type des entreprises que le modèle confond'
-                  : 'Typical profile of companies the model confuses'
-                }
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* Archetype Summary */}
-            <div className="backdrop-blur-sm bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">🎯</span>
-                </div>
-                <h4 className="text-lg font-semibold text-gray-800">
-                  {language === 'fr' ? 'Profil de l\'Erreur Analysée' : 'Analyzed Error Profile'}
-                </h4>
-              </div>
-
-              <div className="prose prose-sm text-gray-700 leading-relaxed">
-                <p className="mb-4">
-                  {language === 'fr'
-                    ? "Basé sur l'analyse SHAP de cette erreur à haute confiance, le modèle a été trompé par un profil d'entreprise présentant des caractéristiques contradictoires:"
-                    : "Based on the SHAP analysis of this high-confidence error, the model was misled by a company profile with contradictory characteristics:"
-                  }
-                </p>
-
-                {/* Dynamic insights based on SHAP values */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <div className="space-y-3">
-                    <h5 className="text-sm font-semibold text-red-700 flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-red-500"></div>
-                      <span>{language === 'fr' ? 'Signaux Trompeurs (Risque)' : 'Misleading Signals (Risk)'}</span>
-                    </h5>
-                    {shapAnalysis.shap_values
-                      .filter(v => v.value > 0)
-                      .slice(0, 3)
-                      .map((feature, idx) => (
-                        <div key={feature.feature} className="text-xs bg-red-50 border border-red-200 rounded-lg p-2">
-                          <div className="font-medium text-red-800">{feature.display_name}</div>
-                          <div className="text-red-600 mt-1">
-                            {language === 'fr'
-                              ? `Contribue +${(feature.value * 100).toFixed(1)}% au risque prédit`
-                              : `Contributes +${(feature.value * 100).toFixed(1)}% to predicted risk`
-                            }
-                          </div>
-                        </div>
-                      ))
-                    }
-                  </div>
-
-                  <div className="space-y-3">
-                    <h5 className="text-sm font-semibold text-green-700 flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded bg-green-500"></div>
-                      <span>{language === 'fr' ? 'Signaux Contradictoires (Protection)' : 'Contradictory Signals (Protection)'}</span>
-                    </h5>
-                    {shapAnalysis.shap_values
-                      .filter(v => v.value < 0)
-                      .slice(0, 3)
-                      .map((feature, idx) => (
-                        <div key={feature.feature} className="text-xs bg-green-50 border border-green-200 rounded-lg p-2">
-                          <div className="font-medium text-green-800">{feature.display_name}</div>
-                          <div className="text-green-600 mt-1">
-                            {language === 'fr'
-                              ? `Réduit le risque de ${Math.abs(feature.value * 100).toFixed(1)}%`
-                              : `Reduces risk by ${Math.abs(feature.value * 100).toFixed(1)}%`
-                            }
-                          </div>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Model Decision-Making Explanation */}
-            <div className="backdrop-blur-sm bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-2xl p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">🧠</span>
-                </div>
-                <h4 className="text-lg font-semibold text-gray-800">
-                  {language === 'fr' ? 'Processus de Décision du Modèle' : 'Model Decision-Making Process'}
-                </h4>
-              </div>
-
-              <div className="space-y-4 text-sm text-gray-700">
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-white text-xs font-bold">1</span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800 mb-1">
-                      {language === 'fr' ? 'Point de Départ' : 'Starting Point'}
-                    </div>
-                    <div>
-                      {language === 'fr'
-                        ? `Le modèle commence avec une probabilité de base de ${(shapAnalysis.base_value * 100).toFixed(1)}% pour cette entreprise.`
-                        : `The model starts with a base probability of ${(shapAnalysis.base_value * 100).toFixed(1)}% for this company.`
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-white text-xs font-bold">2</span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800 mb-1">
-                      {language === 'fr' ? 'Analyse des Caractéristiques' : 'Feature Analysis'}
-                    </div>
-                    <div>
-                      {language === 'fr'
-                        ? "Le modèle examine chaque métrique financière et ajuste sa prédiction en fonction de ce qu'il a appris pendant l'entraînement."
-                        : "The model examines each financial metric and adjusts its prediction based on what it learned during training."
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-white text-xs font-bold">3</span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800 mb-1">
-                      {language === 'fr' ? 'Erreur de Généralisation' : 'Generalization Error'}
-                    </div>
-                    <div>
-                      {language === 'fr'
-                        ? "Dans ce cas, le modèle a sur-généralisé à partir de patterns vus pendant l'entraînement, menant à une prédiction incorrecte mais confiante."
-                        : "In this case, the model over-generalized from patterns seen during training, leading to an incorrect but confident prediction."
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Strategic Insights */}
-            <div className="backdrop-blur-sm bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-2xl p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">💡</span>
-                </div>
-                <h4 className="text-lg font-semibold text-gray-800">
-                  {language === 'fr' ? 'Implications Stratégiques' : 'Strategic Implications'}
-                </h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <h5 className="text-sm font-semibold text-emerald-700">
-                    {language === 'fr' ? 'Pour l\'Amélioration du Modèle' : 'For Model Improvement'}
-                  </h5>
-                  <ul className="text-xs text-gray-700 space-y-2">
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Collecter plus de données sur des entreprises avec des profils similaires"
-                          : "Collect more data on companies with similar profiles"
-                        }
-                      </span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Considérer des interactions entre variables pour capturer la complexité"
-                          : "Consider variable interactions to capture complexity"
-                        }
-                      </span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Ajuster les seuils de confiance pour ce type de profil"
-                          : "Adjust confidence thresholds for this type of profile"
-                        }
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="space-y-3">
-                  <h5 className="text-sm font-semibold text-teal-700">
-                    {language === 'fr' ? 'Pour la Prise de Décision' : 'For Decision Making'}
-                  </h5>
-                  <ul className="text-xs text-gray-700 space-y-2">
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Examiner manuellement les cas avec des signaux contradictoires"
-                          : "Manually examine cases with contradictory signals"
-                        }
-                      </span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Utiliser l'analyse SHAP comme outil de validation des décisions"
-                          : "Use SHAP analysis as a decision validation tool"
-                        }
-                      </span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 flex-shrink-0"></div>
-                      <span>
-                        {language === 'fr'
-                          ? "Développer des règles métier pour ces cas limites"
-                          : "Develop business rules for these edge cases"
-                        }
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Key Takeaway */}
-            <div className="backdrop-blur-sm bg-gradient-to-r from-gray-500/10 to-slate-500/10 border border-gray-500/20 rounded-2xl p-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-gray-500 to-slate-500 flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">📝</span>
-                </div>
-                <h4 className="text-sm font-semibold text-gray-800">
-                  {language === 'fr' ? 'Point Clé à Retenir' : 'Key Takeaway'}
-                </h4>
-              </div>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                {language === 'fr'
-                  ? "Cette analyse SHAP révèle que même les modèles performants peuvent être trompés par des profils d'entreprises atypiques. L'explicabilité nous aide à identifier ces cas limites et à améliorer notre compréhension des décisions du modèle pour une gestion des risques plus robuste."
-                  : "This SHAP analysis reveals that even high-performing models can be misled by atypical company profiles. Explainability helps us identify these edge cases and improve our understanding of model decisions for more robust risk management."
-                }
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
