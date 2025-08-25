@@ -195,7 +195,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
           >
             {/* Copy button pour les messages de l'assistant */}
             {isAssistant && !message.isProcessing && (
-              <div className="absolute top-2 right-0 z-10">
+              <div className="absolute top-2 -right-2 z-10">
                 <motion.button
                   onClick={() => {
                     let textToCopy = '';

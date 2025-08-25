@@ -1,12 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Home, ChevronDown, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function ChatNavbar() {
   const [isVisible, setIsVisible] = useState(false); // Start hidden
+  const pathname = usePathname();
+  
+  // Helper function to determine if a path is active
+  const isActivePath = (path) => {
+    if (path === '/') {
+      return pathname === '/' || pathname === '/chat';
+    }
+    return pathname.startsWith(path);
+  };
+  
+  // Helper function to get button classes based on active state
+  const getButtonClasses = (path, isActive) => {
+    const baseClasses = "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200";
+    
+    if (isActive) {
+      return `${baseClasses} bg-purple-500/40 text-black border border-purple-400/30`;
+    }
+    
+    return `${baseClasses} text-black/70 hover:bg-purple-400/30 hover:text-black`;
+  };
 
   return (
     <>
@@ -44,7 +65,7 @@ export default function ChatNavbar() {
 
                   <Link href="/">
                     <motion.button
-                      className="px-4 py-2 rounded-full bg-white/20 text-black text-sm font-medium hover:bg-purple-400/30 transition-all duration-200"
+                      className={getButtonClasses('/', isActivePath('/'))}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -54,7 +75,7 @@ export default function ChatNavbar() {
 
                   <Link href="/modeling">
                     <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-purple-400/30 transition-all duration-200"
+                      className={getButtonClasses('/modeling', isActivePath('/modeling'))}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -64,7 +85,7 @@ export default function ChatNavbar() {
 
                   <Link href="/research-report">
                     <motion.button
-                      className="px-4 py-2 rounded-full text-black/70 text-sm font-medium hover:bg-purple-400/30 hover:text-black transition-all duration-200"
+                      className={getButtonClasses('/research-report', isActivePath('/research-report'))}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
