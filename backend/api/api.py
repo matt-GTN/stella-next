@@ -10,7 +10,7 @@ import uuid
 import json
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 # Add agent directory to Python path
@@ -565,6 +565,249 @@ async def get_animation_frames(session_id: str):
             detail=f"Failed to generate animation frames: {str(e)}"
         )
 
+# Modeling endpoints for advanced modeling page
+class ModelingRequest(BaseModel):
+    hyperparameters: Dict[str, Any]
+    action: str = "train"
+
+class ConfidenceAnalysisRequest(BaseModel):
+    model_results: Dict[str, Any]
+    threshold: float
+
+class ShapAnalysisRequest(BaseModel):
+    model_results: Dict[str, Any]
+    error_indices: List[int]
+
+@app.post("/modeling/train")
+async def train_model(request: ModelingRequest):
+    """
+    Train RandomForestClassifier with specified hyperparameters
+    """
+    try:
+        logger.info(f"Training model with hyperparameters: {request.hyperparameters}")
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import train_random_forest_model
+            
+            # Train the model
+            result = train_random_forest_model(request.hyperparameters)
+            
+            if 'error' in result:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Model training failed: {result['error']}"
+                )
+            
+            logger.info("Model training completed successfully")
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in model training endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.post("/modeling/confidence-analysis")
+async def analyze_confidence(request: ConfidenceAnalysisRequest):
+    """
+    Analyze model predictions with confidence threshold filtering
+    """
+    try:
+        logger.info(f"Analyzing confidence with threshold: {request.threshold}")
+        
+        # Validate threshold
+        if not 0.5 <= request.threshold <= 1.0:
+            raise HTTPException(
+                status_code=400,
+                detail="Confidence threshold must be between 0.5 and 1.0"
+            )
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import analyze_confidence_threshold
+            
+            # Perform confidence analysis
+            result = analyze_confidence_threshold(request.model_results, request.threshold)
+            
+            if 'error' in result:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Confidence analysis failed: {result['error']}"
+                )
+            
+            logger.info(f"Confidence analysis completed. High-confidence predictions: {result['high_confidence_count']}")
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in confidence analysis endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.post("/modeling/shap-analysis")
+async def analyze_shap(request: ShapAnalysisRequest):
+    """
+    Perform SHAP analysis on model predictions for explainability
+    """
+    try:
+        logger.info(f"Performing SHAP analysis for {len(request.error_indices)} error cases")
+        
+        # Validate error indices
+        if not request.error_indices:
+            raise HTTPException(
+                status_code=400,
+                detail="Error indices are required for SHAP analysis"
+            )
+        
+        if len(request.error_indices) > 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum 10 error cases allowed for SHAP analysis"
+            )
+        
+        # Generate session ID for caching
+        session_id = f"shap_{uuid.uuid4().hex[:8]}"
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import perform_shap_analysis
+            
+            # Perform SHAP analysis with session-based caching
+            result = perform_shap_analysis(request.model_results, request.error_indices, session_id)
+            
+            if 'error' in result:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"SHAP analysis failed: {result['error']}"
+                )
+            
+            logger.info(f"SHAP analysis completed for {len(result['error_cases'])} cases")
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in SHAP analysis endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.get("/modeling/cache-stats")
+async def get_cache_statistics():
+    """
+    Get cache statistics for monitoring and debugging
+    """
+    try:
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import get_cache_statistics
+            
+            # Get cache statistics
+            stats = get_cache_statistics()
+            
+            if 'error' in stats:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to get cache statistics: {stats['error']}"
+                )
+            
+            return stats
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in cache statistics endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+@app.post("/modeling/clear-cache")
+async def clear_modeling_cache(cache_type: str = "all"):
+    """
+    Clear modeling cache entries
+    """
+    try:
+        valid_types = ['all', 'models', 'datasets', 'test_data', 'shap']
+        if cache_type not in valid_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid cache_type. Must be one of: {valid_types}"
+            )
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import clear_cache
+            
+            # Clear cache
+            result = clear_cache(cache_type)
+            
+            if 'error' in result:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to clear cache: {result['error']}"
+                )
+            
+            logger.info(f"Cache cleared: {result}")
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in clear cache endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
 # Legacy endpoints removed - only /chat/stream is needed now with full agent support
 
 # Main chat endpoint
@@ -906,6 +1149,103 @@ def _run_stella_agent(inputs: Dict[str, Any], config: Dict[str, Any]):
     finally:
         # Always change back to original directory
         os.chdir(current_dir)
+
+# Modeling endpoints for machine learning functionality
+class ModelingRequest(BaseModel):
+    hyperparameters: Dict[str, Any]
+    action: str = "train"
+
+class ModelingResponse(BaseModel):
+    success: bool
+    accuracy: Optional[float] = None
+    classification_report: Optional[Dict[str, Any]] = None
+    confusion_matrix: Optional[list] = None
+    feature_importances: Optional[list] = None
+    predictions: Optional[list] = None
+    probabilities: Optional[list] = None
+    test_indices: Optional[list] = None
+    error: Optional[str] = None
+    timestamp: str
+
+
+
+@app.post("/modeling/confidence_analysis")
+async def analyze_confidence(request: Dict[str, Any]):
+    """
+    Analyze model predictions with confidence threshold filtering
+    """
+    try:
+        threshold = request.get('threshold', 0.7)
+        model_results = request.get('model_results')
+        
+        if not model_results:
+            raise HTTPException(status_code=400, detail="Model results required for confidence analysis")
+        
+        logger.info(f"Analyzing confidence with threshold: {threshold}")
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            from src.modeling_utils import analyze_confidence_threshold
+            
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                analyze_confidence_threshold,
+                model_results,
+                threshold
+            )
+            
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except Exception as e:
+        logger.error(f"Error in confidence analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Confidence analysis failed: {str(e)}")
+
+@app.post("/modeling/shap_analysis")
+async def shap_analysis(request: Dict[str, Any]):
+    """
+    Perform SHAP analysis on model predictions
+    """
+    try:
+        model_results = request.get('model_results')
+        error_indices = request.get('error_indices', [])
+        
+        if not model_results:
+            raise HTTPException(status_code=400, detail="Model results required for SHAP analysis")
+        
+        logger.info(f"Performing SHAP analysis on {len(error_indices)} error cases")
+        
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            from src.modeling_utils import perform_shap_analysis
+            
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                perform_shap_analysis,
+                model_results,
+                error_indices
+            )
+            
+            return result
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except Exception as e:
+        logger.error(f"Error in SHAP analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"SHAP analysis failed: {str(e)}")
 
 # Error handlers
 @app.exception_handler(HTTPException)

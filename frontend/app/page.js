@@ -404,9 +404,9 @@ export default function Home() {
       <ChatNavbar />
 
       {/* Main chat area */}
-      <div className="relative h-screen pt-8">
+      <div className="relative h-screen pt-8 pb-4">
         <div className="px-4 h-full">
-          <div className="max-w-4xl mx-auto w-full h-full pb-4 backdrop-blur-xs rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
+          <div className="max-w-4xl mx-auto w-full h-full backdrop-blur-xs rounded-3xl shadow-lg overflow-hidden border border-white/20 flex flex-col">
             <ChatContainer
               messages={messages}
               onSendMessage={sendMessage}

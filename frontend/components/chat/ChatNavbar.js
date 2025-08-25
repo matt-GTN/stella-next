@@ -111,7 +111,7 @@ export default function ChatNavbar() {
             onMouseEnter={() => setIsVisible(true)}
           >
             <motion.div
-              className="bg-purple-500/5 backdrop-blur-sm border border-black/10 rounded-b-xl px-8 py-2 shadow-sm cursor-pointer group"
+              className="bg-purple-500/5 backdrop-blur-xl border border-black/10 rounded-b-xl px-8 py-2 shadow-sm cursor-pointer group"
               whileHover={{
                 scale: 1.05,
                 backgroundColor: "rgba(0,0,0,0.1)",

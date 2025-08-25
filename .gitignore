@@ -36,3 +36,5 @@ build/
 # Cache
 .cache/
 .pytest_cache/
+
+/.kiro
