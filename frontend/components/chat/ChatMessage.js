@@ -392,7 +392,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                   {/* Attached rich content from Stella - only show after animations complete */}
                   {(message.has_chart || message.has_dataframe || message.has_news || message.has_profile) && showFinalContent && (
                     <motion.div 
-                      className="mb-6 border-t border-gray-200 pt-6 grid grid-cols-1 lg:grid-cols-2 gap-3 relative z-0"
+                      className="mb-6 pt-6 grid grid-cols-1 lg:grid-cols-2 gap-3 relative z-0"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: 0.1, type: "spring", stiffness: 400, damping: 30 }}
@@ -436,16 +436,17 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                       )}
 
                       {message.has_dataframe && message.dataframe_data && (
-                        <div className="w-full rounded-xl border border-black/10 overflow-hidden">
-                          <div className="px-3 py-2 text-xs font-medium text-gray-700 border-b border-black/10">Données</div>
-                          <div className="p-2">
+                        <div className="col-span-1 lg:col-span-2 w-full rounded-xl overflow-hidden">
+                          <div className="p-2 w-full">
                             <DataFrameTable dfJson={message.dataframe_data} />
                           </div>
                         </div>
                       )}
 
                       {message.has_news && message.news_data && (
-                        <NewsList newsJson={message.news_data} />
+                        <div className="col-span-1 lg:col-span-2 w-full">
+                          <NewsList newsJson={message.news_data} />
+                        </div>
                       )}
 
                       {message.has_profile && message.profile_data && (

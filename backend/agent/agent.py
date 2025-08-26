@@ -821,7 +821,11 @@ def prepare_news_display_node(state: AgentState):
     ticker = state.get("ticker", "l'entreprise")
     company_name = state.get("company_name", ticker)
     
-    response_content = f"**Voici les dernières actualités que j'ai trouvées pour {company_name.title()} ({ticker.upper()})** :"
+    # Éviter la duplication si company_name et ticker sont identiques ou si on utilise les valeurs par défaut
+    if company_name.lower() == ticker.lower() or ticker == "l'entreprise":
+        response_content = f"**Voici les dernières actualités que j'ai trouvées pour {company_name.title()}** :"
+    else:
+        response_content = f"**Voici les dernières actualités que j'ai trouvées pour {company_name.title()} ({ticker.upper()})** :"
     
     final_message = AIMessage(content=response_content)
     

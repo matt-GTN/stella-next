@@ -24,7 +24,7 @@ function NewsList({ newsJson }) {
 
   return (
     <div className="w-full bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="p-3 text-xs text-gray-500 border-b">Actualités</div>
+      <div className="p-3 text-sm font-semibold bg-gradient-to-r from-purple-400 to-purple-600 text-white border-b">Actualités</div>
       <ul className="divide-y divide-gray-200">
         {articles.map((a, i) => (
           <li key={i} className="p-4">
