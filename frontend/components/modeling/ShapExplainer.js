@@ -4,17 +4,16 @@ import { useState, useEffect } from "react";
 import PlotlyChart from "./PlotlyChart";
 import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw, CheckCircle } from "lucide-react";
 
-export default function ShapExplainer({ modelResults, language }) {
+export default function ShapExplainer({ modelResults, language, confidenceThreshold = 0.7 }) {
   const [selectedErrorCase, setSelectedErrorCase] = useState(null);
   const [shapAnalysis, setShapAnalysis] = useState(null);
   const [isLoadingShap, setIsLoadingShap] = useState(false);
   const [shapError, setShapError] = useState(null);
   const [errorCases, setErrorCases] = useState([]);
 
-  // Find high-confidence error cases when modelResults change
+  // Find high-confidence error cases when modelResults or confidenceThreshold change
   useEffect(() => {
     if (modelResults?.predictions && modelResults?.probabilities && modelResults?.test_indices) {
-      const confidenceThreshold = 0.7;
       const errors = [];
 
       for (let i = 0; i < modelResults.predictions.length; i++) {
@@ -37,11 +36,23 @@ export default function ShapExplainer({ modelResults, language }) {
       }
 
       setErrorCases(errors.slice(0, 10)); // Limit to first 10 error cases
-      if (errors.length > 0 && !selectedErrorCase) {
-        setSelectedErrorCase(errors[0]);
+      
+      // Reset selected error case if it's no longer valid with new threshold
+      if (errors.length > 0) {
+        const currentSelectedStillValid = selectedErrorCase && 
+          errors.some(e => e.index === selectedErrorCase.index);
+        
+        if (!currentSelectedStillValid) {
+          setSelectedErrorCase(errors[0]);
+          // Clear previous SHAP analysis when switching to new error cases
+          setShapAnalysis(null);
+        }
+      } else {
+        setSelectedErrorCase(null);
+        setShapAnalysis(null);
       }
     }
-  }, [modelResults, selectedErrorCase]);
+  }, [modelResults, confidenceThreshold]);
 
   const calculateShapValues = async (errorCase) => {
     if (!errorCase) return;
@@ -246,7 +257,7 @@ export default function ShapExplainer({ modelResults, language }) {
 
   if (!errorCases.length) {
     return (
-      <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-8">
+      <div className="backdrop-blur-lg shadow-xl bg-white/10 border border-white/20 rounded-3xl p-8">
         <div className="text-center">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-gray-400 to-gray-500 flex items-center justify-center mx-auto mb-4">
             <Brain className="w-8 h-8 text-white" />
@@ -267,59 +278,9 @@ export default function ShapExplainer({ modelResults, language }) {
 
   return (
     <div className="space-y-6">
-      {/* SHAP Analysis Header */}
-      <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
-            <Brain className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-800">
-              {language === 'fr' ? 'Analyse d\'Explicabilité SHAP' : 'SHAP Explainability Analysis'}
-            </h2>
-            <p className="text-gray-600">
-              {language === 'fr'
-                ? 'Comprendre pourquoi le modèle fait des erreurs à haute confiance'
-                : 'Understanding why the model makes high-confidence errors'
-              }
-            </p>
-          </div>
-        </div>
-
-        <div className="backdrop-blur-sm bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-2xl p-4">
-          <div className="flex items-center space-x-2 mb-3">
-            <AlertTriangle className="w-5 h-5 text-orange-600" />
-            <h4 className="text-sm font-semibold text-gray-800">
-              {language === 'fr' ? 'Objectif de l\'Analyse' : 'Analysis Objective'}
-            </h4>
-          </div>
-          <p className="text-sm text-gray-700 leading-relaxed">
-            {language === 'fr'
-              ? "L'analyse SHAP révèle quelles caractéristiques financières ont le plus contribué aux prédictions incorrectes à haute confiance. Cela nous aide à identifier l'archétype des entreprises que le modèle confond."
-              : "SHAP analysis reveals which financial characteristics contributed most to incorrect high-confidence predictions. This helps us identify the archetype of companies the model confuses."
-            }
-          </p>
-          {shapAnalysis && (
-            <div className={`mt-3 p-2 rounded-lg text-xs ${shapAnalysis.is_real_shap
-              ? 'bg-green-500/10 text-green-800'
-              : 'bg-yellow-500/10 text-yellow-800'
-              }`}>
-              {shapAnalysis.is_real_shap ? (
-                language === 'fr'
-                  ? "✓ Utilise l'analyse SHAP réelle du modèle entraîné"
-                  : "✓ Using real SHAP analysis from trained model"
-              ) : (
-                language === 'fr'
-                  ? "⚠ Utilise une analyse basée sur l'importance des features (modèle non disponible)"
-                  : "⚠ Using feature importance-based analysis (trained model not available)"
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Error Case Selection */}
-      <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6">
+      <div className="backdrop-blur-lg shadow-xl bg-white/10 border border-white/20 rounded-3xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 flex items-center justify-center">
@@ -339,15 +300,15 @@ export default function ShapExplainer({ modelResults, language }) {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 space-y-6 gap-6">
           {/* Error Case Grid Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-rows-1 sm:grid-rows-2 lg:grid-rows-3 gap-3">
             {errorCases.slice(0, 6).map((errorCase, idx) => (
               <button
                 key={errorCase.index}
                 onClick={() => handleErrorCaseChange(errorCase)}
                 className={`p-3 rounded-xl border transition-all duration-200 text-left ${selectedErrorCase?.index === errorCase.index
-                  ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/40 shadow-lg'
+                  ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/40 shadow-xl'
                   : 'bg-white/10 border-white/20 hover:bg-white/20 hover:border-orange-500/30'
                   }`}
               >
@@ -365,48 +326,15 @@ export default function ShapExplainer({ modelResults, language }) {
                   </div>
                 </div>
                 <div className="text-xs text-gray-600 mb-1">{errorCase.company_info}</div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-red-600 font-medium">
-                    {language === 'fr' ? 'P:' : 'P:'} {errorCase.predicted_label === 0 ? 'Under' : 'Out'}
-                  </span>
-                  <span className="text-green-600 font-medium">
-                    {language === 'fr' ? 'R:' : 'A:'} {errorCase.true_label === 0 ? 'Under' : 'Out'}
-                  </span>
-                </div>
               </button>
             ))}
           </div>
 
-          {/* Dropdown for additional cases */}
-          {errorCases.length > 6 && (
-            <div className="relative">
-              <select
-                value={selectedErrorCase?.index || ''}
-                onChange={(e) => {
-                  const errorCase = errorCases.find(ec => ec.index === e.target.value);
-                  handleErrorCaseChange(errorCase);
-                }}
-                className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 appearance-none"
-              >
-                <option value="">
-                  {language === 'fr' ? 'Ou sélectionner parmi tous les cas...' : 'Or select from all cases...'}
-                </option>
-                {errorCases.map((errorCase, idx) => (
-                  <option key={errorCase.index} value={errorCase.index}>
-                    {language === 'fr'
-                      ? `Cas ${idx + 1}: ${errorCase.company_info} (Confiance: ${(errorCase.confidence * 100).toFixed(1)}%)`
-                      : `Case ${idx + 1}: ${errorCase.company_info} (Confidence: ${(errorCase.confidence * 100).toFixed(1)}%)`
-                    }
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
-            </div>
-          )}
+          
 
           {/* Selected Error Case Details */}
           {selectedErrorCase && (
-            <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+            <div className="backdrop-blur-lg shadow-xl bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
               <h4 className="text-sm font-semibold text-red-800 mb-3">
                 {language === 'fr' ? 'Détails de l\'Erreur Sélectionnée' : 'Selected Error Details'}
               </h4>
@@ -454,6 +382,33 @@ export default function ShapExplainer({ modelResults, language }) {
               </div>
             </div>
           )}
+
+          {/* Dropdown for additional cases */}
+          {errorCases.length > 6 && (
+            <div className="relative">
+              <select
+                value={selectedErrorCase?.index || ''}
+                onChange={(e) => {
+                  const errorCase = errorCases.find(ec => ec.index === e.target.value);
+                  handleErrorCaseChange(errorCase);
+                }}
+                className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 appearance-none"
+              >
+                <option value="">
+                  {language === 'fr' ? 'Ou sélectionner parmi tous les cas...' : 'Or select from all cases...'}
+                </option>
+                {errorCases.map((errorCase, idx) => (
+                  <option key={errorCase.index} value={errorCase.index}>
+                    {language === 'fr'
+                      ? `Cas ${idx + 1}: ${errorCase.company_info} (Confiance: ${(errorCase.confidence * 100).toFixed(1)}%)`
+                      : `Case ${idx + 1}: ${errorCase.company_info} (Confidence: ${(errorCase.confidence * 100).toFixed(1)}%)`
+                    }
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
+            </div>
+          )}
         </div>
 
         {/* Analysis Button */}
@@ -461,9 +416,9 @@ export default function ShapExplainer({ modelResults, language }) {
           <button
             onClick={() => calculateShapValues(selectedErrorCase)}
             disabled={!selectedErrorCase || isLoadingShap}
-            className={`inline-flex items-center justify-center space-x-3 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 ${!selectedErrorCase || isLoadingShap
+            className={`inline-flex items-center justify-center space-x-3 px-8 py-4 mt-4 rounded-xl font-semibold text-lg transition-all duration-300 ${!selectedErrorCase || isLoadingShap
               ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
-              : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white transform hover:scale-105 shadow-lg hover:shadow-orange-500/25'
+              : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white transform hover:scale-105 shadow-xl hover:shadow-orange-500/25'
               }`}
           >
             {isLoadingShap ? (
@@ -479,36 +434,7 @@ export default function ShapExplainer({ modelResults, language }) {
             )}
           </button>
 
-          {shapAnalysis && (
-            <div className={`ml-4 p-3 rounded-xl ${shapAnalysis.is_real_shap
-              ? 'bg-green-500/10 border border-green-500/20'
-              : 'bg-yellow-500/10 border border-yellow-500/20'
-              }`}>
-              <div className="flex items-center space-x-2">
-                {shapAnalysis.is_real_shap ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-xs text-green-800">
-                      {language === 'fr'
-                        ? 'Analyse SHAP réelle'
-                        : 'Real SHAP analysis'
-                      }
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                    <span className="text-xs text-yellow-800">
-                      {language === 'fr'
-                        ? 'Analyse basée sur l\'importance des features'
-                        : 'Feature importance-based analysis'
-                      }
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
+          
         </div>
 
 
@@ -516,7 +442,7 @@ export default function ShapExplainer({ modelResults, language }) {
 
       {/* SHAP Waterfall Visualization */}
       {shapAnalysis && (
-        <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-3xl p-6">
+        <div className="backdrop-blur-lg shadow-xl bg-white/10 border border-white/20 rounded-3xl p-6">
           <div className="flex items-center space-x-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
               <TrendingDown className="w-5 h-5 text-white" />
@@ -566,7 +492,7 @@ export default function ShapExplainer({ modelResults, language }) {
               font: { family: 'Arial, sans-serif' }
             }}
             config={{
-              displayModeBar: true,
+              displayModeBar: false,
               displaylogo: false,
               modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d', 'zoom2d'],
               responsive: true
@@ -576,7 +502,7 @@ export default function ShapExplainer({ modelResults, language }) {
 
           {/* Feature Contribution Details */}
           <div className="mt-6 space-y-4">
-            <div className="backdrop-blur-sm bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="backdrop-blur-lg shadow-xl bg-white/5 border border-white/10 rounded-2xl p-4">
               <div className="flex items-center space-x-2 mb-4">
                 <Lightbulb className="w-5 h-5 text-yellow-600" />
                 <h4 className="text-sm font-semibold text-gray-800">

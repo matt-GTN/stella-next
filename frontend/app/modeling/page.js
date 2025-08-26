@@ -26,6 +26,9 @@ function ModelingPageContent() {
   const [isModelTrained, setIsModelTrained] = useState(false);
   const [modelResults, setModelResults] = useState(null);
   const [error, setError] = useState(null);
+  
+  // Confidence analysis state - shared between ConfidenceAnalyzer and ShapExplainer
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
 
   // Optimal parameters
   const OPTIMAL_PARAMS = {
@@ -90,18 +93,20 @@ function ModelingPageContent() {
     }
   }, [hyperparams]);
 
+
+
   // Memoized confusion matrix data for Plotly
   const confusionMatrixData = useMemo(() => {
     if (!modelResults?.confusion_matrix) return null;
 
     const cm = modelResults.confusion_matrix;
     const stellaColorScale = [
-      [0, 'rgba(255, 255, 255, 0.1)'],
-      [0.2, 'rgba(147, 51, 234, 0.3)'],
-      [0.4, 'rgba(147, 51, 234, 0.5)'],
-      [0.6, 'rgba(147, 51, 234, 0.7)'],
-      [0.8, 'rgba(147, 51, 234, 0.9)'],
-      [1, 'rgba(147, 51, 234, 1)']
+      [0, '#B197FC'],  // lilac with enough depth for white
+      [0.2, '#9D6CFA'], // soft purple
+      [0.4, '#864CFA'], // medium purple
+      [0.6, '#7137EB'], // strong purple
+      [0.8, '#5B26D4'], // dark violet
+      [1, '#3C1375']    // near violet-black
     ];
 
     const total = cm.flat().reduce((sum, val) => sum + val, 0);
@@ -109,15 +114,17 @@ function ModelingPageContent() {
       row.map(val => ((val / total) * 100).toFixed(1))
     );
 
+    // scikit-learn confusion_matrix returns rows/cols ordered by labels [0, 1]
+    // so show axis tick labels in the same order to avoid inversion
     return [{
       z: cm,
       x: [
-        language === 'fr' ? 'Classe 1 (Sur-perf.)' : 'Class 1 (Out-perf.)',
-        language === 'fr' ? 'Classe 0 (Sous-perf.)' : 'Class 0 (Under-perf.)'
+        language === 'fr' ? 'Classe 0' : 'Class 0 (Under-perf.)',
+        language === 'fr' ? 'Classe 1' : 'Class 1 (Out-perf.)'
       ],
       y: [
-        language === 'fr' ? 'Classe 1 (Sur-perf.)' : 'Class 1 (Out-perf.)',
-        language === 'fr' ? 'Classe 0 (Sous-perf.)' : 'Class 0 (Under-perf.)'
+        language === 'fr' ? 'Classe 0' : 'Class 0 (Under-perf.)',
+        language === 'fr' ? 'Classe 1' : 'Class 1 (Out-perf.)'
       ],
       type: 'heatmap',
       colorscale: stellaColorScale,
@@ -135,7 +142,7 @@ function ModelingPageContent() {
     }];
   }, [modelResults?.confusion_matrix, language]);
 
-  // Memoized feature importance data for Plotly
+  // Memorized feature importance data for Plotly
   const featureImportanceData = useMemo(() => {
     if (!modelResults?.feature_importances) return null;
 
@@ -146,10 +153,10 @@ function ModelingPageContent() {
     });
 
     return [{
-      x: features.map(f => f.importance),
-      y: features.map(f => f.display_name || f.feature),
+      x: features.map(f => f.display_name || f.feature),
+      y: features.map(f => f.importance),
       type: 'bar',
-      orientation: 'h',
+      orientation: 'v',
       marker: { color: colors },
       text: features.map(f => (f.importance * 100).toFixed(2) + '%'),
       textposition: 'auto',
@@ -165,7 +172,7 @@ function ModelingPageContent() {
     <div className="min-h-screen w-full relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full">
         <ThreadsBackground
-          color={[0, 0, 0]}
+          color={[0.6706, 0.2784, 0.7373]}
           amplitude={1}
           distance={0}
           enableMouseInteraction={true}
@@ -174,7 +181,7 @@ function ModelingPageContent() {
 
       <ChatNavbar />
 
-      <div className="relative z-20 h-screen flex flex-col pt-24">
+      <div className="relative z-20 h-screen flex flex-col pt-4">
         <div className="flex-1 px-6 py-6 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
 
@@ -198,15 +205,15 @@ function ModelingPageContent() {
               <div className="flex items-center space-x-3">
                 <button
                   onClick={resetToOptimal}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-gray-100 w-36 h-10 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
                 >
                   <RefreshCw className="w-4 h-4 inline mr-2" />
-                  {language === 'fr' ? 'Optimal' : 'Reset'}
+                  {language === 'fr' ? 'Reset' : 'Reset'}
                 </button>
                 <button
                   onClick={trainModel}
                   disabled={isTraining}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
+                  className="px-6 py-2 w-36 h-10 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
                 >
                   {isTraining ? (
                     <>
@@ -233,7 +240,7 @@ function ModelingPageContent() {
               // Configuration compacte
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-4">
-                  <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+                  <div className="bg-white/10 backdrop-blur-lg shadow-xl border border-white/20 rounded-xl p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">
                       {language === 'fr' ? 'Hyperparamètres' : 'Hyperparameters'}
                     </h3>
@@ -306,105 +313,115 @@ function ModelingPageContent() {
             ) : (
               // Dashboard des résultats
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
                 {/* Métriques principales */}
-                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {language === 'fr' ? 'Performance' : 'Performance'}
-                    </h3>
-                    <TrendingUp className="w-5 h-5 text-purple-500" />
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-gray-600">
-                          {language === 'fr' ? 'Précision' : 'Accuracy'}
-                        </span>
-                        <span className="text-2xl font-bold text-purple-600">
-                          {(modelResults.accuracy * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-1000"
-                          style={{ width: `${modelResults.accuracy * 100}%` }}
-                        />
-                      </div>
+                <div className="flex flex-col gap-3">
+                  <div className="bg-white/10 backdrop-blur-lg shadow-xl border border-white/20 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        {language === 'fr' ? 'Performance' : 'Performance'}
+                      </h3>
+                      <TrendingUp className="w-5 h-5 text-purple-500" />
                     </div>
 
-                    {modelResults.classification_report && (
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/20">
-                        <div className="text-center">
-                          <div className="text-lg font-semibold text-gray-800">
-                            {(modelResults.classification_report['0']?.precision * 100 || 0).toFixed(0)}%
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-600">
+                            {language === 'fr' ? 'Précision' : 'Accuracy'}
+                          </span>
+                          <span className="text-2xl font-bold text-purple-600">
+                            {(modelResults.accuracy * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-1000"
+                            style={{ width: `${modelResults.accuracy * 100}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {modelResults.classification_report && (
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/20">
+                          <div className="text-center">
+                            <div className="text-lg font-semibold text-gray-800">
+                              {(modelResults.classification_report['0']?.precision * 100 || 0).toFixed(0)}%
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {language === 'fr' ? 'Précision Classe 0' : 'Class 0 Precision'}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-600">
-                            {language === 'fr' ? 'Précision Classe 0' : 'Class 0 Precision'}
+                          <div className="text-center">
+                            <div className="text-lg font-semibold text-gray-800">
+                              {(modelResults.classification_report['1']?.precision * 100 || 0).toFixed(0)}%
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              {language === 'fr' ? 'Précision Classe 1' : 'Class 1 Precision'}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-center">
-                          <div className="text-lg font-semibold text-gray-800">
-                            {(modelResults.classification_report['1']?.precision * 100 || 0).toFixed(0)}%
-                          </div>
-                          <div className="text-xs text-gray-600">
-                            {language === 'fr' ? 'Précision Classe 1' : 'Class 1 Precision'}
-                          </div>
-                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Matrice de confusion */}
+                  <div className="bg-white/10 backdrop-blur-lg shadow-xl border border-white/20 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        {language === 'fr' ? 'Matrice de Confusion' : 'Confusion Matrix'}
+                      </h3>
+                      <Target className="w-5 h-5 text-purple-500" />
+                    </div>
+
+                    {confusionMatrixData && (
+                      <div className="h-64">
+                        <PlotlyChart
+                          data={confusionMatrixData}
+                          layout={{
+                            margin: { l: 60, r: 20, t: 20, b: 60 },
+                            paper_bgcolor: 'rgba(0,0,0,0)',
+                            plot_bgcolor: 'rgba(0,0,0,0)',
+                            font: { color: '#374151', size: 12 },
+                            xaxis: { title: language === 'fr' ? 'Prédit' : 'Predicted' },
+                            yaxis: { title: language === 'fr' ? 'Réel' : 'Actual', autorange: 'reversed' }
+                          }}
+                          config={{ displayModeBar: false }}
+                        />
                       </div>
                     )}
                   </div>
                 </div>
-
-                {/* Matrice de confusion */}
-                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {language === 'fr' ? 'Matrice de Confusion' : 'Confusion Matrix'}
-                    </h3>
-                    <Target className="w-5 h-5 text-purple-500" />
-                  </div>
-
-                  {confusionMatrixData && (
-                    <div className="h-64">
-                      <PlotlyChart
-                        data={confusionMatrixData}
-                        layout={{
-                          margin: { l: 60, r: 20, t: 20, b: 60 },
-                          paper_bgcolor: 'rgba(0,0,0,0)',
-                          plot_bgcolor: 'rgba(1,0,0,0)',
-                          font: { color: '#374151', size: 12 },
-                          xaxis: { title: language === 'fr' ? 'Prédit' : 'Predicted' },
-                          yaxis: { title: language === 'fr' ? 'Réel' : 'Actual' }
-                        }}
-                        config={{ displayModeBar: false }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-
-
                 {/* Graphique d'importance complet */}
-                <div className="lg:col-span-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-6">
+                <div className="bg-white/10 backdrop-blur-lg shadow-xl border border-white/20 rounded-xl p-6 flex flex-col">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">
                     {language === 'fr' ? 'Importance des Caractéristiques' : 'Feature Importance'}
                   </h3>
-
+                  
                   {featureImportanceData && (
-                    <div className="h-80">
+                    <div className="flex-1 min-h-0"> {/* flex-1 takes remaining space, min-h-0 allows shrinking */}
                       <PlotlyChart
                         data={featureImportanceData}
                         layout={{
-                          margin: { l: 200, r: 20, t: 20, b: 40 },
+                          margin: { l: 40, r: 20, t: 20, b: 80 },
                           paper_bgcolor: 'rgba(0,0,0,0)',
                           plot_bgcolor: 'rgba(0,0,0,0)',
                           font: { color: '#374151', size: 12 },
-                          xaxis: { title: language === 'fr' ? 'Importance' : 'Importance' },
-                          yaxis: { automargin: true }
+                          height: null, // Let Plotly use container height
+                          autosize: true, // Enable autosizing
+                          xaxis: { 
+                            title: language === 'fr' ? 'Caractéristiques' : 'Features',
+                            tickangle: -45,
+                            automargin: true 
+                          },
+                          yaxis: { 
+                            title: language === 'fr' ? 'Importance' : 'Importance' 
+                          }
                         }}
-                        config={{ displayModeBar: false }}
+                        config={{ 
+                          displayModeBar: false,
+                          responsive: true // Ensure responsiveness is enabled
+                        }}
+                        className="w-full h-full" // Make sure PlotlyChart uses full container size
                       />
                     </div>
                   )}
@@ -412,12 +429,20 @@ function ModelingPageContent() {
 
                 {/* Confidence Analysis Section */}
                 <div className="lg:col-span-3">
-                  <ConfidenceAnalyzer modelResults={modelResults} language={language} />
+                  <ConfidenceAnalyzer 
+                    modelResults={modelResults} 
+                    language={language}
+                    onConfidenceThresholdChange={setConfidenceThreshold}
+                  />
                 </div>
 
                 {/* SHAP Analysis Section */}
                 <div className="lg:col-span-3">
-                  <ShapExplainer modelResults={modelResults} language={language} />
+                  <ShapExplainer 
+                    modelResults={modelResults} 
+                    language={language}
+                    confidenceThreshold={confidenceThreshold}
+                  />
                 </div>
               </div>
             )}

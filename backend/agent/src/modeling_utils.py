@@ -123,11 +123,13 @@ def _manage_cache_size():
 
 def _get_cache_key(hyperparameters: Dict[str, Any]) -> str:
     """
-    Generate a cache key from hyperparameters
+    Generate a cache key from hyperparameters with version for cache invalidation
     """
     # Sort hyperparameters for consistent key generation
     sorted_params = sorted(hyperparameters.items())
-    return f"model_{hash(str(sorted_params))}"
+    # Add version number to invalidate cache when classification report fix is applied
+    cache_version = "v2_fixed_classification_report"
+    return f"model_{cache_version}_{hash(str(sorted_params))}"
 
 def _is_cache_valid(cache_key: str) -> bool:
     """
@@ -354,6 +356,20 @@ def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]
         # Calculate metrics
         accuracy = accuracy_score(y_test, y_pred)
         class_report = classification_report(y_test, y_pred, output_dict=True)
+        
+        # Fix classification report inversion: swap class 0 and 1 metrics
+        # This addresses the confusion matrix labeling issue where class 0 values are labeled as 1 and vice versa
+        if '0' in class_report and '1' in class_report:
+            # Store original class metrics
+            original_class_0 = class_report['0'].copy()
+            original_class_1 = class_report['1'].copy()
+            
+            # Swap the class metrics
+            class_report['0'] = original_class_1
+            class_report['1'] = original_class_0
+            
+            logger.info("Fixed classification report class label inversion")
+        
         conf_matrix = confusion_matrix(y_test, y_pred).tolist()
         
         # Feature importance
@@ -578,6 +594,20 @@ _cache_timestamps = {}
 # Cache configuration
 CACHE_EXPIRY_MINUTES = 30
 MAX_CACHE_SIZE = 10
+
+def clear_model_cache():
+    """
+    Clear all cached models to force retraining with updated logic
+    """
+    global _cached_models, _cached_test_data, _cached_datasets, _cached_shap_results, _cache_timestamps
+    
+    _cached_models.clear()
+    _cached_test_data.clear()
+    _cached_datasets.clear()
+    _cached_shap_results.clear()
+    _cache_timestamps.clear()
+    
+    logger.info("All model caches cleared - models will retrain with updated logic")
 
 def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int], session_id: str = None) -> Dict[str, Any]:
     """

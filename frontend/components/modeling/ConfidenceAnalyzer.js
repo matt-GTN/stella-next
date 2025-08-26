@@ -5,8 +5,16 @@ import { Target, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
 import Slider from "./Slider";
 import PlotlyChart from "./PlotlyChart";
 
-export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
+export default function ConfidenceAnalyzer({ modelResults, language = 'en', onConfidenceThresholdChange }) {
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
+  
+  // Handle threshold changes and notify parent
+  const handleThresholdChange = (newThreshold) => {
+    setConfidenceThreshold(newThreshold);
+    if (onConfidenceThresholdChange) {
+      onConfidenceThresholdChange(newThreshold);
+    }
+  };
   const [confidenceAnalysis, setConfidenceAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
@@ -60,6 +68,11 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
     const highConfidenceCount = highConfidenceIndices.length;
     
     if (highConfidenceCount === 0) {
+      // Calculate overall accuracy even when no high-confidence predictions
+      const overallCorrect = predictions.reduce((sum, pred, idx) => 
+        sum + (pred === trueLabels[idx] ? 1 : 0), 0);
+      const overallAccuracy = overallCorrect / totalPredictions;
+      
       return {
         threshold,
         total_predictions: totalPredictions,
@@ -71,7 +84,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           class_1: { correct: 0, total: 0, accuracy: 0 }
         },
         coverage_percentage: 0,
-        precision_improvement: 0
+        precision_improvement: 0,
+        overall_accuracy: overallAccuracy
       };
     }
 
@@ -141,12 +155,12 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
     
     // Custom color scale matching Stella's purple gradient theme
     const stellaColorScale = [
-      [0, 'rgba(255, 255, 255, 0.1)'],
-      [0.2, 'rgba(147, 51, 234, 0.3)'],
-      [0.4, 'rgba(147, 51, 234, 0.5)'],
-      [0.6, 'rgba(147, 51, 234, 0.7)'],
-      [0.8, 'rgba(147, 51, 234, 0.9)'],
-      [1, 'rgba(147, 51, 234, 1)']
+      [0, '#B197FC'],  // lilac with enough depth for white
+      [0.2, '#9D6CFA'], // soft purple
+      [0.4, '#864CFA'], // medium purple
+      [0.6, '#7137EB'], // strong purple
+      [0.8, '#5B26D4'], // dark violet
+      [1, '#3C1375']    // near violet-black
     ];
     
     // Calculate percentages for better understanding
@@ -158,12 +172,12 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
     return [{
       z: cm,
       x: [
-        language === 'fr' ? 'Classe 1 (Sur-perf.)' : 'Class 1 (Out-perf.)',
-        language === 'fr' ? 'Classe 0 (Sous-perf.)' : 'Class 0 (Under-perf.)'
+        language === 'fr' ? 'Classe 0' : 'Class 0 (Under-perf.)',
+        language === 'fr' ? 'Classe 1' : 'Class 1 (Out-perf.)'
       ],
       y: [
-        language === 'fr' ? 'Classe 1 (Sur-perf.)' : 'Class 1 (Out-perf.)',
-        language === 'fr' ? 'Classe 0 (Sous-perf.)' : 'Class 0 (Under-perf.)'
+        language === 'fr' ? 'Classe 0' : 'Class 0 (Under-perf.)',
+        language === 'fr' ? 'Classe 1' : 'Class 1 (Out-perf.)'
       ],
       type: 'heatmap',
       colorscale: stellaColorScale,
@@ -207,11 +221,9 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
 
   return (
     <div className="space-y-8">
-     
-
       {/* Error Display */}
       {analysisError && (
-        <div className="backdrop-blur-xs shadow-lg bg-red-500/10 border border-red-500/20 rounded-2xl p-6">
+        <div className="backdrop-blur-lg shadow-lg bg-red-500/10 border border-red-500/20 rounded-2xl p-6">
           <div className="flex items-start space-x-3">
             <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-4 h-4 text-white" />
@@ -231,45 +243,139 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
         </div>
       )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Interactive Confidence Threshold */}
+        <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-8">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-gray-800">
+                {language === 'fr' ? 'Seuil de Confiance' : 'Confidence Threshold'}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {language === 'fr' ? 'Ajustement en temps réel' : 'Real-time adjustment'}
+              </p>
+            </div>
+          </div>
 
-      {/* Interactive Confidence Threshold */}
-      <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-8">
-        <div className="flex items-center space-x-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-white" />
+          <div className="bg-gray-100 border border-white/10 rounded-2xl p-6">
+            <Slider
+              label={language === 'fr' ? "Seuil de confiance minimum" : "Minimum confidence threshold"}
+              value={confidenceThreshold}
+              min={0.5}
+              max={1.0}
+              step={0.01}
+              onChange={handleThresholdChange}
+              help={language === 'fr' 
+                ? "Seules les prédictions avec une confiance supérieure à ce seuil seront conservées"
+                : "Only predictions with confidence above this threshold will be kept"
+              }
+              formatValue={(value) => `${(value * 100).toFixed(0)}%`}
+            />
           </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800">
-              {language === 'fr' ? 'Seuil de Confiance' : 'Confidence Threshold'}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {language === 'fr' ? 'Ajustement en temps réel' : 'Real-time adjustment'}
-            </p>
-          </div>
+          {/* Comparison with Overall Performance */}
+          {confidenceAnalysis && (
+            <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="backdrop-blur-lg shadow-lg bg-gray-100 border border-blue-500/20 rounded-2xl p-4">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-2">
+                    {language === 'fr' ? '📊 Performance Globale' : '📊 Overall Performance'}
+                  </h4>
+                  <p className="text-xs text-gray-700">
+                    {language === 'fr' ? 'Précision:' : 'Accuracy:'} {' '}
+                    <span className="font-mono text-blue-600">
+                      {(confidenceAnalysis.overall_accuracy * 100).toFixed(1)}%
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {language === 'fr' ? 'Toutes les prédictions' : 'All predictions'}
+                  </p>
+                </div>
+                
+                <div className="backdrop-blur-lg shadow-lg bg-gray-100 border border-purple-500/20 rounded-2xl p-4">
+                  <h4 className="text-sm font-semibold text-purple-800 mb-2">
+                    {language === 'fr' ? '🎯 Performance Filtrée' : '🎯 Filtered Performance'}
+                  </h4>
+                  <p className="text-xs text-gray-700">
+                    {language === 'fr' ? 'Précision:' : 'Accuracy:'} {' '}
+                    <span className="font-mono text-purple-600">
+                      {(confidenceAnalysis.high_confidence_accuracy * 100).toFixed(1)}%
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {language === 'fr' ? 'Haute confiance uniquement' : 'High confidence only'}
+                  </p>
+                </div>
+              </div>
+          )}
         </div>
 
-        <div className="bg-gray-100 border border-white/10 rounded-2xl p-6">
-          <Slider
-            label={language === 'fr' ? "Seuil de confiance minimum" : "Minimum confidence threshold"}
-            value={confidenceThreshold}
-            min={0.5}
-            max={1.0}
-            step={0.01}
-            onChange={setConfidenceThreshold}
-            help={language === 'fr' 
-              ? "Seules les prédictions avec une confiance supérieure à ce seuil seront conservées"
-              : "Only predictions with confidence above this threshold will be kept"
-            }
-            formatValue={(value) => `${(value * 100).toFixed(0)}%`}
-          />
-        </div>
+        {/* High-Confidence Confusion Matrix */}
+        {confidenceAnalysis && confidenceAnalysis.high_confidence_count > 0 && (
+          <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                <Target className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  {language === 'fr' ? 'Matrice de Confusion - Haute Confiance' : 'High-Confidence Confusion Matrix'}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {language === 'fr' 
+                    ? `Seuil: ${(confidenceThreshold * 100).toFixed(0)}% - ${confidenceAnalysis.high_confidence_count} prédictions`
+                    : `Threshold: ${(confidenceThreshold * 100).toFixed(0)}% - ${confidenceAnalysis.high_confidence_count} predictions`
+                  }
+                </p>
+              </div>
+            </div>
+            
+            <PlotlyChart
+              data={getHighConfidenceConfusionMatrixData()}
+              layout={{
+                title: '',
+                xaxis: { 
+                  title: {
+                    text: language === 'fr' ? 'Classe Prédite (Haute Confiance)' : 'Predicted Class (High Confidence)',
+                    font: { size: 14, color: 'rgba(75, 85, 99, 1)' }
+                  },
+                  tickfont: { color: 'rgba(75, 85, 99, 1)', size: 11 },
+                  gridcolor: 'rgba(255, 255, 255, 0.1)',
+                  zeroline: false
+                },
+                yaxis: { 
+                  title: {
+                    text: language === 'fr' ? 'Classe Réelle' : 'Actual Class',
+                    font: { size: 14, color: 'rgba(75, 85, 99, 1)' }
+                  },
+                  tickfont: { color: 'rgba(75, 85, 99, 1)', size: 11 },
+                  autorange: 'reversed',
+                  gridcolor: 'rgba(255, 255, 255, 0.1)',
+                  zeroline: false
+                },
+                height: 350,
+                margin: { l: 120, r: 80, t: 20, b: 80 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Arial, sans-serif' }
+              }}
+              config={{
+                displayModeBar: false,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d', 'zoom2d'],
+                responsive: true
+              }}
+              className="w-full h-96"
+            />
+          </div>
+        )}
       </div>
-
       {/* Real-time Metrics */}
       {confidenceAnalysis && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 grid-spans-2 gap-6">
           {/* High-Confidence Count */}
-          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-white" />
             </div>
@@ -289,7 +395,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* Coverage Percentage */}
-          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-4">
               <Target className="w-8 h-8 text-white" />
             </div>
@@ -309,7 +415,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* High-Confidence Accuracy */}
-          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center mx-auto mb-4">
               <TrendingUp className="w-8 h-8 text-white" />
             </div>
@@ -329,7 +435,7 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
           </div>
 
           {/* Precision Improvement */}
-          <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
+          <div className="backdrop-blur-lg shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-white" />
             </div>
@@ -346,99 +452,6 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en' }) {
             <p className="text-xs text-gray-500 mt-1">
               {language === 'fr' ? 'vs modèle global' : 'vs overall model'}
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* High-Confidence Confusion Matrix */}
-      {confidenceAnalysis && confidenceAnalysis.high_confidence_count > 0 && (
-        <div className="backdrop-blur-xs shadow-lg bg-white/10 border border-white/20 rounded-3xl p-6">
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-              <Target className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-800">
-                {language === 'fr' ? 'Matrice de Confusion - Haute Confiance' : 'High-Confidence Confusion Matrix'}
-              </h3>
-              <p className="text-sm text-gray-600">
-                {language === 'fr' 
-                  ? `Seuil: ${(confidenceThreshold * 100).toFixed(0)}% - ${confidenceAnalysis.high_confidence_count} prédictions`
-                  : `Threshold: ${(confidenceThreshold * 100).toFixed(0)}% - ${confidenceAnalysis.high_confidence_count} predictions`
-                }
-              </p>
-            </div>
-          </div>
-          
-          <PlotlyChart
-            data={getHighConfidenceConfusionMatrixData()}
-            layout={{
-              title: '',
-              xaxis: { 
-                title: {
-                  text: language === 'fr' ? 'Classe Prédite (Haute Confiance)' : 'Predicted Class (High Confidence)',
-                  font: { size: 14, color: 'rgba(75, 85, 99, 1)' }
-                },
-                tickfont: { color: 'rgba(75, 85, 99, 1)', size: 11 },
-                gridcolor: 'rgba(255, 255, 255, 0.1)',
-                zeroline: false
-              },
-              yaxis: { 
-                title: {
-                  text: language === 'fr' ? 'Classe Réelle' : 'Actual Class',
-                  font: { size: 14, color: 'rgba(75, 85, 99, 1)' }
-                },
-                tickfont: { color: 'rgba(75, 85, 99, 1)', size: 11 },
-                autorange: 'reversed',
-                gridcolor: 'rgba(255, 255, 255, 0.1)',
-                zeroline: false
-              },
-              height: 350,
-              margin: { l: 120, r: 80, t: 20, b: 80 },
-              paper_bgcolor: 'rgba(0,0,0,0)',
-              plot_bgcolor: 'rgba(0,0,0,0)',
-              font: { family: 'Arial, sans-serif' }
-            }}
-            config={{
-              displayModeBar: true,
-              displaylogo: false,
-              modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d', 'zoom2d'],
-              responsive: true
-            }}
-            className="w-full h-96"
-          />
-          
-          {/* Comparison with Overall Performance */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="backdrop-blur-xs shadow-lg bg-gray-100 border border-blue-500/20 rounded-2xl p-4">
-              <h4 className="text-sm font-semibold text-blue-800 mb-2">
-                {language === 'fr' ? '📊 Performance Globale' : '📊 Overall Performance'}
-              </h4>
-              <p className="text-xs text-gray-700">
-                {language === 'fr' ? 'Précision:' : 'Accuracy:'} {' '}
-                <span className="font-mono text-blue-600">
-                  {(confidenceAnalysis.overall_accuracy * 100).toFixed(1)}%
-                </span>
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                {language === 'fr' ? 'Toutes les prédictions' : 'All predictions'}
-              </p>
-            </div>
-            
-            <div className="backdrop-blur-xs shadow-lg bg-gray-100 border border-purple-500/20 rounded-2xl p-4">
-              <h4 className="text-sm font-semibold text-purple-800 mb-2">
-                {language === 'fr' ? '🎯 Performance Filtrée' : '🎯 Filtered Performance'}
-              </h4>
-              <p className="text-xs text-gray-700">
-                {language === 'fr' ? 'Précision:' : 'Accuracy:'} {' '}
-                <span className="font-mono text-purple-600">
-                  {(confidenceAnalysis.high_confidence_accuracy * 100).toFixed(1)}%
-                </span>
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                {language === 'fr' ? 'Haute confiance uniquement' : 'High confidence only'}
-              </p>
-            </div>
           </div>
         </div>
       )}

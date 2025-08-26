@@ -61,7 +61,7 @@ export default function ChatNavbar() {
                 </motion.div>
 
                 {/* Navigation panels */}
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-3">
 
                   <Link href="/">
                     <motion.button
@@ -89,7 +89,7 @@ export default function ChatNavbar() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      Rapport
+                      Recherche
                     </motion.button>
                   </Link>
                 </div>

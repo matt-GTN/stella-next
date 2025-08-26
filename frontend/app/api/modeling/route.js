@@ -26,6 +26,9 @@ export async function POST(request) {
       case 'shap-analysis':
         return await handleShapAnalysis(model_results, error_indices);
       
+      case 'clear-cache':
+        return await handleClearCache();
+      
       case 'health-check':
         return await handleHealthCheck();
       
@@ -33,7 +36,7 @@ export async function POST(request) {
         return NextResponse.json(
           { 
             error: 'Invalid action parameter',
-            details: `Supported actions: train, confidence-analysis, shap-analysis, health-check. Received: ${action}`,
+            details: `Supported actions: train, confidence-analysis, shap-analysis, clear-cache, health-check. Received: ${action}`,
             timestamp: new Date().toISOString()
           },
           { status: 400 }
@@ -186,6 +189,46 @@ async function handleModelTraining(hyperparameters, retryCount = 0) {
     }
     
     throw error; // Re-throw unexpected errors
+  }
+}
+
+async function handleClearCache() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/modeling/clear-cache`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return NextResponse.json(
+        { 
+          error: 'Failed to clear cache', 
+          details: errorData.detail || errorData.error || `HTTP ${response.status}`,
+          backend_status: response.status
+        },
+        { status: response.status }
+      );
+    }
+
+    const result = await response.json();
+    
+    return NextResponse.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to clear cache',
+      details: error.message,
+      backend_url: BACKEND_URL,
+      timestamp: new Date().toISOString()
+    }, { status: 503 });
   }
 }
 

@@ -8,7 +8,7 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
   }
 
   const { accuracy, classification_report } = modelResults;
-  
+
   // Extract metrics for both classes
   const class0Metrics = classification_report['0'] || {};
   const class1Metrics = classification_report['1'] || {};
@@ -24,14 +24,14 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
   // Get metric icon and color based on performance
   const getMetricStyle = (value, type = 'default') => {
     if (typeof value !== 'number') return { color: 'gray', icon: AlertTriangle };
-    
+
     const percentage = value * 100;
     if (type === 'accuracy') {
       if (percentage >= 80) return { color: 'emerald', icon: Award };
       if (percentage >= 70) return { color: 'blue', icon: Target };
       return { color: 'orange', icon: AlertTriangle };
     }
-    
+
     if (percentage >= 85) return { color: 'emerald', icon: TrendingUp };
     if (percentage >= 75) return { color: 'blue', icon: Target };
     if (percentage >= 65) return { color: 'orange', icon: TrendingDown };
@@ -120,7 +120,7 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
             </div>
             <div>
               <h4 className="text-base md:text-lg font-semibold text-gray-800">
-                {language === 'fr' ? 'Classe 0 - Sous-performance' : 'Class 0 - Under-performing'}
+                {language === 'fr' ? 'Classe 0' : 'Class 0 - Under-performing'}
               </h4>
               <p className="text-xs md:text-sm text-gray-600">
                 {language === 'fr' ? 'Actions à risque élevé' : 'High-risk stocks'}
@@ -182,7 +182,7 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
             </div>
             <div>
               <h4 className="text-base md:text-lg font-semibold text-gray-800">
-                {language === 'fr' ? 'Classe 1 - Sur-performance' : 'Class 1 - Out-performing'}
+                {language === 'fr' ? 'Classe 1' : 'Class 1 - Out-performing'}
               </h4>
               <p className="text-xs md:text-sm text-gray-600">
                 {language === 'fr' ? 'Actions performantes' : 'High-performing stocks'}
@@ -247,11 +247,11 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
             {language === 'fr' ? 'Analyse des Performances' : 'Performance Analysis'}
           </h4>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 text-xs md:text-sm">
           <div>
             <p className="text-gray-700 leading-relaxed">
-              {language === 'fr' 
+              {language === 'fr'
                 ? `La précision globale de ${formatPercent(accuracy)} indique une performance ${accuracy >= 0.75 ? 'solide' : accuracy >= 0.65 ? 'modérée' : 'faible'} du modèle.`
                 : `The overall accuracy of ${formatPercent(accuracy)} indicates ${accuracy >= 0.75 ? 'solid' : accuracy >= 0.65 ? 'moderate' : 'poor'} model performance.`
               }
@@ -259,7 +259,7 @@ export default function ModelMetrics({ modelResults, language = 'fr' }) {
           </div>
           <div>
             <p className="text-gray-700 leading-relaxed">
-              {language === 'fr' 
+              {language === 'fr'
                 ? `La classe 0 (sous-performance) montre une précision de ${formatPercent(class0Metrics.precision)}, cruciale pour l'identification des risques.`
                 : `Class 0 (under-performing) shows ${formatPercent(class0Metrics.precision)} precision, crucial for risk identification.`
               }

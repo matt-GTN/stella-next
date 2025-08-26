@@ -194,7 +194,7 @@ export default function ResearchReportPage() {
                 >
                   <motion.button
                     onClick={handleDownload}
-                    className="w-full flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl"
+                    className="w-4/5 ml-10 flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     disabled={isDownloading}

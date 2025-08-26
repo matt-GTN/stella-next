@@ -734,6 +734,40 @@ async def analyze_shap(request: Dict[str, Any]):
             detail=f"Internal server error: {str(e)}"
         )
 
+@app.post("/modeling/clear-cache")
+async def clear_model_cache():
+    """
+    Clear all cached models to force retraining with updated logic
+    """
+    try:
+        # Change to agent directory for execution
+        current_dir = os.getcwd()
+        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
+        os.chdir(agent_dir)
+        
+        try:
+            # Import modeling utilities
+            from src.modeling_utils import clear_model_cache
+            
+            # Clear the cache
+            clear_model_cache()
+            
+            return {
+                "success": True,
+                "message": "Model cache cleared successfully. Next training will use updated logic.",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        finally:
+            os.chdir(current_dir)
+            
+    except Exception as e:
+        logger.error(f"Error clearing model cache: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear cache: {str(e)}"
+        )
+
 @app.get("/modeling/cache-stats")
 async def get_cache_statistics():
     """
