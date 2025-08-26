@@ -476,6 +476,11 @@ export function clearLangSmithCache() {
  * Generate cache key for LangSmith data - includes message-specific data for uniqueness
  */
 function generateLangSmithCacheKey(sessionId, currentStep = -1, language = 'en', messageData = null) {
+  // Use the unique cache key if provided, otherwise generate one
+  if (messageData && messageData._cacheKey) {
+    return `${sessionId}-${currentStep}-${language}-${messageData._cacheKey}`;
+  }
+  
   // Include message-specific data in cache key to ensure each message gets unique visualization
   let messageSignature = '';
   if (messageData) {
@@ -551,12 +556,12 @@ export async function fetchLangSmithTrace(sessionId) {
  * Perform the actual LangSmith API request
  */
 async function performLangSmithRequest(sessionId) {
-  // Use direct backend URL for now (Next.js proxy might have issues)
-  const apiUrl = `http://localhost:8000/langsmith-trace/${sessionId}`;
+  // Use Next.js API route to proxy the request
+  const apiUrl = `/api/langsmith-trace/${sessionId}`;
   
   // Ajouter un timeout côté client aussi
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 secondes
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes
   
   try {
     const response = await fetch(apiUrl, {
@@ -604,22 +609,8 @@ export async function hasLangSmithTrace(sessionId) {
   try {
     console.log('🔍 [LangSmith] Vérification de la trace pour session:', sessionId);
     
-    // D'abord tester la connectivité de base
-    try {
-      const healthResponse = await fetch('http://localhost:8000/health');
-      console.log('🔍 [LangSmith] Health check:', healthResponse.status, healthResponse.ok);
-      
-      if (!healthResponse.ok) {
-        console.warn('⚠️ [LangSmith] Backend non accessible');
-        return false;
-      }
-    } catch (healthError) {
-      console.warn('⚠️ [LangSmith] Erreur de connectivité backend:', healthError);
-      return false;
-    }
-    
-    // Ensuite tester l'endpoint LangSmith avec GET
-    const apiUrl = `http://localhost:8000/langsmith-trace/${sessionId}`;
+    // Test the Next.js API route directly
+    const apiUrl = `/api/langsmith-trace/${sessionId}`;
     console.log('🔍 [LangSmith] Test de l\'endpoint:', apiUrl);
     
     const response = await fetch(apiUrl, { 
@@ -654,13 +645,20 @@ export async function hasLangSmithTrace(sessionId) {
 export async function getLangSmithGraphData(sessionId, currentStep = -1, language = 'en', messageData = null) {
   console.log('🔍 [LangSmith] getLangSmithGraphData appelé pour session:', sessionId);
   
+  // Check if caching is disabled for this message
+  const disableCache = messageData?._disableCache;
+  
   // Check transformed data cache first - include message data for unique caching
   const transformedCacheKey = generateLangSmithCacheKey(sessionId, currentStep, language, messageData);
   const cachedTransformed = langsmithDataCache.get(`transformed-${transformedCacheKey}`);
   
-  if (isCacheValid(cachedTransformed)) {
+  if (!disableCache && isCacheValid(cachedTransformed)) {
     console.log('💾 [LangSmith] Données transformées récupérées depuis le cache pour message:', messageData?.id);
     return cachedTransformed.data;
+  }
+  
+  if (disableCache) {
+    console.log('🚫 [LangSmith] Cache désactivé pour message:', messageData?.id);
   }
   
   try {
@@ -670,11 +668,13 @@ export async function getLangSmithGraphData(sessionId, currentStep = -1, languag
     const transformedData = transformLangSmithData(langsmithData, currentStep, language);
     console.log('🔍 [LangSmith] Données transformées:', transformedData);
     
-    // Cache the transformed data with message-specific key
-    langsmithDataCache.set(`transformed-${transformedCacheKey}`, {
-      data: transformedData,
-      timestamp: Date.now()
-    });
+    // Cache the transformed data with message-specific key (only if caching is enabled)
+    if (!disableCache) {
+      langsmithDataCache.set(`transformed-${transformedCacheKey}`, {
+        data: transformedData,
+        timestamp: Date.now()
+      });
+    }
     
     return transformedData;
   } catch (error) {

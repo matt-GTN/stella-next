@@ -9,6 +9,11 @@ const transformationCache = new Map();
  * Generate cache key for workflow transformations - includes message-specific data for uniqueness
  */
 function generateTransformationCacheKey(toolCalls, currentStep, messageData = null) {
+  // Use the unique cache key if provided, otherwise generate one
+  if (messageData && messageData._cacheKey) {
+    return `workflow-${currentStep}-${messageData._cacheKey}`;
+  }
+  
   // Include message-specific data to ensure each message gets unique visualization
   let messageSignature = '';
   if (messageData) {
@@ -422,13 +427,20 @@ export function determineNodeStates(nodes, toolCalls = [], currentStep = -1) {
  * Synchronous transformation function with message-specific caching
  */
 export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, language = 'en', messageData = null) {
+  // Check if caching is disabled for this message
+  const disableCache = messageData?._disableCache;
+  
   // Generate message-specific cache key
   const cacheKey = generateTransformationCacheKey(toolCalls, currentStep, messageData);
   
-  // Check cache first
-  if (transformationCache.has(cacheKey)) {
+  // Check cache first (only if caching is enabled)
+  if (!disableCache && transformationCache.has(cacheKey)) {
     console.log('💾 [WorkflowTransform] Using cached data for message:', messageData?.id);
     return transformationCache.get(cacheKey);
+  }
+  
+  if (disableCache) {
+    console.log('🚫 [WorkflowTransform] Cache désactivé pour message:', messageData?.id);
   }
 
   try {
@@ -462,8 +474,10 @@ export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, lang
       }
     };
 
-    // Cache the result
-    transformationCache.set(cacheKey, result);
+    // Cache the result (only if caching is enabled)
+    if (!disableCache) {
+      transformationCache.set(cacheKey, result);
+    }
     
     return result;
   } catch (error) {

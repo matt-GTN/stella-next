@@ -18,6 +18,36 @@ const GraphVisualizationWrapper = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dataSource, setDataSource] = useState('unknown');
+  
+  // Debug: Log when graphData changes
+  React.useEffect(() => {
+    if (graphData) {
+      console.log('🎯 [GraphWrapper] GraphData set for message:', message?.id, {
+        nodes: graphData.nodes?.length || 0,
+        edges: graphData.edges?.length || 0,
+        messageId: graphData._messageId,
+        dataSource
+      });
+    }
+  }, [graphData, message?.id, dataSource]);
+  
+  // Clear graph data when message changes to prevent showing wrong data
+  const prevMessageIdRef = React.useRef();
+  React.useEffect(() => {
+    if (prevMessageIdRef.current && prevMessageIdRef.current !== message?.id) {
+      console.log('🔄 [GraphWrapper] Message changed, clearing graph data and caches');
+      setGraphData(null);
+      setLoading(true);
+      setError(null);
+      setDataSource('unknown');
+      
+      // Clear caches to ensure fresh data
+      import('./index.js').then(({ clearAllGraphCaches }) => {
+        clearAllGraphCaches();
+      });
+    }
+    prevMessageIdRef.current = message?.id;
+  }, [message?.id]);
 
   useEffect(() => {
     const loadGraphData = async () => {
@@ -29,6 +59,7 @@ const GraphVisualizationWrapper = ({
       
       setLoading(true);
       setError(null);
+      setGraphData(null); // Clear previous graph data immediately
 
       try {
         // Each message should have its own unique identifier for trace visualization
@@ -42,6 +73,11 @@ const GraphVisualizationWrapper = ({
           throw new Error('Aucun identifiant de message disponible');
         }
 
+        // Create a unique cache key that includes message timestamp and content hash
+        const messageHash = message ? 
+          `${messageId}-${message.timestamp || Date.now()}-${JSON.stringify(message.toolCalls || []).substring(0, 100)}-${Math.random()}` : 
+          `${messageId}-${Date.now()}-${Math.random()}`;
+
         // Try LangSmith data first, but use message-specific session ID
         // This ensures each message gets its own trace visualization
         let langsmithSuccess = false;
@@ -49,8 +85,10 @@ const GraphVisualizationWrapper = ({
         if (effectiveSessionId) {
           try {
             console.log('🔍 [GraphWrapper] Tentative de récupération des données LangSmith pour:', effectiveSessionId);
-            // Pass message data to ensure unique caching per message
-            const langsmithGraphData = await getLangSmithGraphData(effectiveSessionId, currentStep, language, message);
+            // Pass message data with unique hash to ensure unique caching per message
+            // Add _disableCache flag to force fresh data generation
+            const messageWithHash = { ...message, _cacheKey: messageHash, _disableCache: true };
+            const langsmithGraphData = await getLangSmithGraphData(effectiveSessionId, currentStep, language, messageWithHash);
             
             // Verify we got valid data with nodes
             if (langsmithGraphData && langsmithGraphData.nodes && langsmithGraphData.nodes.length > 0) {
@@ -58,7 +96,10 @@ const GraphVisualizationWrapper = ({
                 nodes: langsmithGraphData.nodes.length,
                 edges: langsmithGraphData.edges.length
               });
-              setGraphData(langsmithGraphData);
+              // Deep clone to ensure complete independence
+              const clonedData = JSON.parse(JSON.stringify(langsmithGraphData));
+              clonedData._messageId = messageId; // Add message identifier
+              setGraphData(clonedData);
               setDataSource('langsmith');
               langsmithSuccess = true;
             } else {
@@ -88,15 +129,20 @@ const GraphVisualizationWrapper = ({
             console.log('📋 [GraphWrapper] Aucun tool call - création d\'une visualisation basique');
           }
 
-          // Pass message data to ensure unique visualization per message
-          const legacyGraphData = transformWorkflowDataSync(toolCalls, currentStep, language, message);
+          // Pass message data with unique hash to ensure unique visualization per message
+          // Add _disableCache flag to force fresh data generation
+          const messageWithHash = { ...message, _cacheKey: messageHash, _disableCache: true };
+          const legacyGraphData = transformWorkflowDataSync(toolCalls, currentStep, language, messageWithHash);
           console.log('📋 [GraphWrapper] Données legacy transformées pour message:', messageId, {
             nodes: legacyGraphData?.nodes?.length || 0,
             edges: legacyGraphData?.edges?.length || 0
           });
           
           if (legacyGraphData && legacyGraphData.nodes && legacyGraphData.nodes.length > 0) {
-            setGraphData(legacyGraphData);
+            // Deep clone to ensure complete independence
+            const clonedData = JSON.parse(JSON.stringify(legacyGraphData));
+            clonedData._messageId = messageId; // Add message identifier
+            setGraphData(clonedData);
             setDataSource('legacy');
           } else {
             throw new Error('Impossible de créer une visualisation pour ce message');
@@ -115,7 +161,7 @@ const GraphVisualizationWrapper = ({
     const timeoutId = setTimeout(loadGraphData, 50);
     
     return () => clearTimeout(timeoutId);
-  }, [message?.id, currentStep, language, sessionId]); // Use message.id as key dependency
+  }, [message?.id, message?.timestamp, JSON.stringify(message?.toolCalls), currentStep, language, sessionId]); // Include more specific dependencies
 
   if (loading) {
     return (
@@ -164,6 +210,7 @@ const GraphVisualizationWrapper = ({
       )}
       
       <AgentDecisionDAG 
+        key={`graph-${message?.id}-${dataSource}-${message?.timestamp || 'no-ts'}`} // Force re-render with message timestamp
         graphData={graphData}
         currentStep={currentStep}
         language={language}

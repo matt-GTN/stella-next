@@ -62,10 +62,10 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
 
     return Array.from(new Set(out.filter(Boolean)));
   }, [
-    message.available_tools, 
-    message.availableTools, 
-    message.tools, 
-    message.tool_list, 
+    message.available_tools,
+    message.availableTools,
+    message.tools,
+    message.tool_list,
     message.tool_config
   ]);
 
@@ -74,25 +74,25 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
 
   // Check if this message has agent activity using the utility function
   const hasAgentActivity = checkAgentActivity(message, messageIndex);
-  
+
   // Check if message is completely finished (not streaming, processing, or waiting for content)
   const isMessageFinished = React.useMemo(() => {
     // Message is not finished if it's still streaming or processing
     if (message.isStreaming || message.isProcessing) {
       return false;
     }
-    
+
     // For messages with tools, wait for final content to be shown
     const hasTools = message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
     if (hasTools) {
       return showFinalContent; // Wait for tool animations and final content to complete
     }
-    
+
     // For simple text messages, check if we have content
     return !!(message.content || message.initialContent || message.finalContent);
   }, [
-    message.isStreaming, 
-    message.isProcessing, 
+    message.isStreaming,
+    message.isProcessing,
     showFinalContent,
     message.toolCalls?.length,
     !!message.content,
@@ -103,26 +103,26 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
   // Calculate if tool animations are complete - optimized with stable dependencies
   const toolAnimationsComplete = React.useMemo(() => {
     const hasTools = message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
-    
+
     if (!hasTools) {
       return true; // No tools = animations complete
     }
-    
+
     // If message is still streaming or processing, animations are not complete
     if (message.isStreaming || message.isProcessing) {
       return false;
     }
-    
+
     // If we have final content or attachments, and we're not streaming, animations should be complete
     return !!(message.finalContent || message.has_chart || message.has_dataframe || message.has_news || message.has_profile);
   }, [
-    message.toolCalls?.length, 
-    message.isStreaming, 
-    message.isProcessing, 
-    !!message.finalContent, 
-    !!message.has_chart, 
-    !!message.has_dataframe, 
-    !!message.has_news, 
+    message.toolCalls?.length,
+    message.isStreaming,
+    message.isProcessing,
+    !!message.finalContent,
+    !!message.has_chart,
+    !!message.has_dataframe,
+    !!message.has_news,
     !!message.has_profile
   ]);
 
@@ -131,11 +131,11 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
     if (toolAnimationsComplete && !showFinalContent) {
       const hasTools = message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
       const delay = hasTools ? 200 : 0;
-      
+
       const timer = setTimeout(() => {
         setShowFinalContent(true);
       }, delay);
-      
+
       return () => clearTimeout(timer);
     } else if (!toolAnimationsComplete && showFinalContent) {
       setShowFinalContent(false);
@@ -199,7 +199,10 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                 <motion.button
                   onClick={() => {
                     let textToCopy = '';
-                    if (message.initialContent && message.finalContent) {
+                    if (message.has_profile) {
+                      // For profile messages, only copy initial content
+                      textToCopy = message.initialContent || message.content || '';
+                    } else if (message.initialContent && message.finalContent) {
                       textToCopy = `${message.initialContent}\n\n${message.finalContent}`;
                     } else if (message.initialContent) {
                       textToCopy = message.initialContent;
@@ -316,12 +319,12 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                                   key={`${message.id}-tool-${index}`}
                                   initial={{ opacity: 0, y: 20, scale: 0.9 }}
                                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                                  transition={{ 
-                                    duration: 0.3, 
-                                    delay: 0.5 + (index * 0.8), 
-                                    type: "spring", 
-                                    stiffness: 400, 
-                                    damping: 30 
+                                  transition={{
+                                    duration: 0.3,
+                                    delay: 0.5 + (index * 0.8),
+                                    type: "spring",
+                                    stiffness: 400,
+                                    damping: 30
                                   }}
                                   layout={false}
                                   className="mb-2 last:mb-0"
@@ -346,9 +349,9 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                     );
                   })()}
 
-                  {/* Final message content (after tool calls) - only show after animations complete */}
-                  {message.finalContent && showFinalContent && (
-                    <motion.div 
+                  {/* Final message content (after tool calls) - only show after animations complete and when no profile */}
+                  {message.finalContent && showFinalContent && !message.has_profile && (
+                    <motion.div
                       className={`mb-6 ${message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0 ? 'border-t border-gray-200 pt-6' : ''}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -391,7 +394,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
 
                   {/* Attached rich content from Stella - only show after animations complete */}
                   {(message.has_chart || message.has_dataframe || message.has_news || message.has_profile) && showFinalContent && (
-                    <motion.div 
+                    <motion.div
                       className="mb-6 pt-6 grid grid-cols-1 lg:grid-cols-2 gap-3 relative z-0"
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -450,7 +453,9 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                       )}
 
                       {message.has_profile && message.profile_data && (
-                        <CompanyProfile profileJson={message.profile_data} />
+                        <div className="col-span-1 lg:col-span-2 w-full">
+                          <CompanyProfile profileJson={message.profile_data} />
+                        </div>
                       )}
                     </motion.div>
                   )}
@@ -501,6 +506,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                               }}
                             >
                               <GraphVisualizationWrapper
+                                key={`graph-wrapper-${message.id}`} // Ensure unique instance per message
                                 message={message}
                                 language={language}
                                 sessionId={message.id} // Use message ID as unique identifier for each message's trace

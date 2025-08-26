@@ -38,6 +38,18 @@ export function clearAllGraphCaches() {
   console.log('🧹 [GraphVisualization] All caches cleared');
 }
 
+// Utility function to clear caches for a specific message
+export function clearMessageGraphCache(messageId) {
+  const { clearTransformationCache } = require('./workflowTransformer');
+  const { clearLangSmithCache } = require('./langsmithTransformer');
+  
+  // For now, clear all caches since we don't have message-specific clearing
+  // In the future, we could implement selective cache clearing
+  clearTransformationCache();
+  clearLangSmithCache();
+  console.log('🧹 [GraphVisualization] Caches cleared for message:', messageId);
+}
+
 // Content extraction utilities
 export {
   extractUserQuery,
