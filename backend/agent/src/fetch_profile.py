@@ -4,6 +4,7 @@ import requests
 import os
 import json
 from .fetch_data import APILimitError # On réutilise notre exception personnalisée
+from .translate_profile import translate_profile_to_french
 
 FMP_API_KEY = os.getenv("FMP_API_KEY")
 
@@ -40,10 +41,30 @@ def fetch_company_profile(ticker: str) -> str:
             "fullTimeEmployees": profile_data.get("fullTimeEmployees"),
             "exchange": profile_data.get("exchangeShortName"),
             "country": profile_data.get("country"),
-            "image": profile_data.get("image") # 
+            "image": profile_data.get("image")
         }
         
-        return json.dumps(key_info)
+        # Debug: afficher les données originales
+        print(f"[DEBUG] Original profile data for {ticker}:")
+        print(f"  - Country: {key_info.get('country')}")
+        print(f"  - Sector: {key_info.get('sector')}")
+        print(f"  - Industry: {key_info.get('industry')}")
+        print(f"  - Exchange: {key_info.get('exchange')}")
+        
+        # Traduire les données en français
+        translated_info = translate_profile_to_french(key_info)
+        
+        # Debug: afficher les données traduites
+        print(f"[DEBUG] Translated profile data for {ticker}:")
+        print(f"  - Country: {translated_info.get('country')}")
+        print(f"  - Sector: {translated_info.get('sector')}")
+        print(f"  - Industry: {translated_info.get('industry')}")
+        print(f"  - Exchange: {translated_info.get('exchange')}")
+        
+        # Ajouter le ticker aux données traduites
+        translated_info["ticker"] = ticker
+        
+        return json.dumps(translated_info)
 
     except requests.exceptions.RequestException as e:
         raise APILimitError(f"Erreur de réseau en contactant FMP pour le profil de {ticker}: {e}")

@@ -14,7 +14,8 @@ import {
   Newspaper,
   Calculator,
   DollarSign,
-  Settings
+  Settings,
+  Wrench
 } from "lucide-react";
 
 // Mapping des noms d'outils vers leurs icônes correspondantes
@@ -107,7 +108,7 @@ export default function ToolCall({ toolName, args = {} }) {
 
   return (
     <motion.div
-      className="my-2 p-3 bg-gray-100/80 backdrop-blur-sm border border-gray-200/60 rounded-xl"
+      className="my-2 p-3 bg-gray-100/80 backdrop-blur-sm border border-gray-200/60 rounded-xl relative"
       initial={{ opacity: 0, y: 10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 25 }}
@@ -136,6 +137,14 @@ export default function ToolCall({ toolName, args = {} }) {
             <div className="h-3 w-3 bg-purple-500 rounded-full animate-ping"></div>
           </div>
         </div>
+      </div>
+      
+      {/* "Outil appelé" indicator at bottom right */}
+      <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+        <Wrench className="w-3 h-3 text-gray-500" />
+        <span className="text-[10px] text-gray-500 font-medium">
+          Outil appelé
+        </span>
       </div>
     </motion.div>
   );

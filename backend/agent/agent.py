@@ -849,15 +849,20 @@ def prepare_profile_display_node(state: AgentState):
         final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer le profil de l'entreprise.")
         return {"messages": [final_message]}
 
+    # Debug: afficher le contenu du profil reçu
+    print(f"[DEBUG] Profile content received in prepare_profile_display_node:")
+    print(f"  Content: {tool_message.content[:200]}...")
+    
     prompt = f"""
     Voici les informations de profil pour une entreprise au format JSON :
     {tool_message.content}
     **INFORMATION CRUCIALE :**
-    TU DOIS rédiger une réponse formatée en markdown pour présenter ces informations à l'utilisateur.
+    TU DOIS rédiger une réponse formatée en markdown pour présenter ces informations à l'utilisateur EN FRANÇAIS.
     Rédige une réponse la plus exhaustive et agréable possible pour présenter ces informations à l'utilisateur.
     Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information qui n'est pas null dans le JSON.
     Tu n'afficheras pas l'image du logo, l'UI s'en chargera, et tu n'as pas besoin de la mentionner.
     Présente les informations de manière sobre en listant les points du JSON.
+    IMPORTANT: Si la description est déjà en français dans le JSON, utilise-la EXACTEMENT comme elle est écrite.
     Si il y a un champ null, TU DOIS TOUJOURS le compléter via tes connaissances, sans inventer de données.
     Si tu ne trouves pas d'informations, indique simplement "Inconnu" ou "Non disponible".
     Termine en donnant le lien vers leur site web.
@@ -868,6 +873,10 @@ def prepare_profile_display_node(state: AgentState):
     
     # On attache le JSON pour que le front-end puisse afficher l'image du logo !
     setattr(final_message, 'profile_json', tool_message.content)
+    
+    # Debug: afficher le JSON qui sera envoyé au frontend
+    print(f"[DEBUG] Profile JSON attached to message:")
+    print(f"  JSON: {tool_message.content[:300]}...")
     
     return {"messages": [final_message]}
 
