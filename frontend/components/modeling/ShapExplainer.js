@@ -208,9 +208,9 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
     console.log('Error case confidence:', errorCase.confidence);
     console.log('Expected class 1 probability:', errorCase.probabilities ? errorCase.probabilities[1] : 'N/A');
     console.log('Has pre-computed SHAP:', !!errorCase.shap_analysis);
-    
+
     setSelectedErrorCase(errorCase);
-    
+
     // Use pre-computed SHAP analysis if available
     if (errorCase.shap_analysis) {
       console.log('Using pre-computed SHAP analysis');
@@ -292,14 +292,14 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
       },
       increasing: {
         marker: {
-          color: 'rgba(239, 68, 68, 0.8)',
-          line: { color: 'rgba(239, 68, 68, 1)', width: 2 }
+          color: 'rgba(34, 197, 94, 0.8)',
+          line: { color: 'rgba(34, 197, 94, 1)', width: 2 }
         }
       },
       decreasing: {
         marker: {
-          color: 'rgba(34, 197, 94, 0.8)',
-          line: { color: 'rgba(34, 197, 94, 1)', width: 2 }
+          color: 'rgba(239, 68, 68, 0.8)',
+          line: { color: 'rgba(239, 68, 68, 1)', width: 2 }
         }
       },
       totals: {
@@ -616,18 +616,18 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Top Risk Contributors */}
                 <div className="space-y-3">
-                  <h5 className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-                    {language === 'fr' ? 'Principaux Facteurs de Risque' : 'Top Risk Contributors'}
+                  <h5 className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                    {language === 'fr' ? 'Principaux Facteurs Protecteurs' : 'Top Risk Contributors'}
                   </h5>
                   {shapAnalysis.shap_values
                     .filter(v => v.value > 0)
                     .slice(0, 3)
                     .map((feature, idx) => (
-                      <div key={feature.feature} className="flex items-center justify-between p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <div key={feature.feature} className="flex items-center justify-between p-2 bg-green-500/10 border border-green-500/20 rounded-lg">
                         <span className="text-xs font-medium text-gray-800">{feature.display_name}</span>
                         <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-red-700">+{(feature.value * 100).toFixed(2)}%</span>
-                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          <span className="text-xs font-bold text-green-700">+{(feature.value * 100).toFixed(2)}%</span>
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
                         </div>
                       </div>
                     ))
@@ -636,18 +636,18 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
 
                 {/* Top Protective Factors */}
                 <div className="space-y-3">
-                  <h5 className="text-xs font-semibold text-green-700 uppercase tracking-wide">
-                    {language === 'fr' ? 'Principaux Facteurs Protecteurs' : 'Top Protective Factors'}
+                  <h5 className="text-xs font-semibold text-red-700 uppercase tracking-wide">
+                    {language === 'fr' ? 'Principaux Facteurs de Risque' : 'Top Protective Factors'}
                   </h5>
                   {shapAnalysis.shap_values
                     .filter(v => v.value < 0)
                     .slice(0, 3)
                     .map((feature, idx) => (
-                      <div key={feature.feature} className="flex items-center justify-between p-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <div key={feature.feature} className="flex items-center justify-between p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
                         <span className="text-xs font-medium text-gray-800">{feature.display_name}</span>
                         <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-green-700">{(feature.value * 100).toFixed(2)}%</span>
-                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          <span className="text-xs font-bold text-red-700">{(feature.value * 100).toFixed(2)}%</span>
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
                         </div>
                       </div>
                     ))

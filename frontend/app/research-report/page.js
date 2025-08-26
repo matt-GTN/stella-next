@@ -7,13 +7,7 @@ import ThreadsBackground from "@/components/backgrounds/ThreadsBackground";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Download,
-  FileText,
-  ExternalLink,
   BookOpen,
-  ChartBar,
-  Brain,
-  Target,
-  FileSearch,
   Loader2,
   Database,
   Settings,
@@ -146,7 +140,8 @@ export default function ResearchReportPage() {
                           onMouseLeave={() => setHoveredSection(null)}
                         >
                           <motion.div
-                            className="flex items-start space-x-3 p-4 rounded-2xl transition-all duration-300 bg-white/80 shadow-lg border-white/20"
+                            className="flex items-start space-x-3 p-4 rounded-2xl bg-white/80 shadow-lg border-white/20"
+                            whileHover={{ scale: 1.02 }}
                             transition={{ duration: 0.2 }}
                           >
                             <motion.div
@@ -194,13 +189,23 @@ export default function ResearchReportPage() {
                 >
                   <motion.button
                     onClick={handleDownload}
-                    className="w-4/5 ml-10 flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl"
-                    whileHover={{ scale: 1.02 }}
+                    className="w-4/5 ml-10 flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-2xl shadow-xl"
+                    whileHover={{ 
+                      scale: 1.02,
+                      background: "linear-gradient(to right, #7c3aed, #be185d)",
+                      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+                    }}
                     whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.3 }}
                     disabled={isDownloading}
                   >
                     {isDownloading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      >
+                        <Loader2 className="w-5 h-5" />
+                      </motion.div>
                     ) : (
                       <Download className="w-5 h-5" />
                     )}
@@ -240,7 +245,13 @@ export default function ResearchReportPage() {
                           exit={{ opacity: 0 }}
                         >
                           <div className="text-center">
-                            <Loader2 className="w-10 h-10 text-purple-600 animate-spin mx-auto mb-3" />
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                              className="mx-auto mb-3"
+                            >
+                              <Loader2 className="w-10 h-10 text-purple-600" />
+                            </motion.div>
                             <p className="text-sm text-gray-700 font-medium">
                               {language === 'fr' ? 'Chargement du document...' : 'Loading document...'}
                             </p>

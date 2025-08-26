@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import { Home, ChevronDown, MessageCircle } from "lucide-react";
+import { Home, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function ChatNavbar() {
   const [isVisible, setIsVisible] = useState(false); // Start hidden
@@ -50,8 +51,13 @@ export default function ChatNavbar() {
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="p-2 rounded-full bg-gray-700">
-                    <MessageCircle className="h-4 w-4 text-white" />
+                  <div className="relative h-8 w-8 rounded-full bg-gray-700 overflow-hidden border-2 border-purple-400/30">
+                    <Image
+                      src="/avatar_stella.png"
+                      alt="Stella Avatar"
+                      fill
+                      className="object-cover"
+                    />
                   </div>
                   <div>
                     <h1 className="text-sm font-bold text-black">
@@ -79,7 +85,7 @@ export default function ChatNavbar() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      Modélisation
+                      Dashboard ML
                     </motion.button>
                   </Link>
 
@@ -124,7 +130,7 @@ export default function ChatNavbar() {
                 animate={{ y: [0, 2, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
-                <MessageCircle className="h-3 w-3 text-black/60 group-hover:text-black transition-colors" />
+                <Home className="h-3 w-3 text-black/60 group-hover:text-black transition-colors" />
                 <ChevronDown className="h-3 w-3 text-black/60 group-hover:text-black transition-colors" />
               </motion.div>
             </motion.div>
