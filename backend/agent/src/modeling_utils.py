@@ -305,6 +305,225 @@ def prepare_features_and_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Seri
     
     return X, y, feature_cols
 
+def _compute_error_cases_by_threshold(predictions, probabilities, true_labels, test_indices):
+    """
+    Pre-compute error cases for different confidence thresholds to avoid frontend calculations
+    """
+    import numpy as np
+    
+    predictions = np.array(predictions)
+    probabilities = np.array(probabilities)
+    true_labels = np.array(true_labels)
+    
+    # Define threshold ranges to pre-compute
+    thresholds = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    
+    error_cases_by_threshold = {}
+    
+    for threshold in thresholds:
+        errors = []
+        
+        for i in range(len(predictions)):
+            prediction = predictions[i]
+            prob_array = probabilities[i]
+            actual_label = true_labels[i]
+            
+            # Calculate confidence in the actual prediction made
+            prediction_confidence = prob_array[prediction]
+            
+            # Find high-confidence mistakes
+            if prediction_confidence >= threshold and prediction != actual_label:
+                errors.append({
+                    'index': i,
+                    'predicted_label': int(prediction),
+                    'true_label': int(actual_label),
+                    'confidence': float(prediction_confidence),
+                    'probabilities': [float(prob_array[0]), float(prob_array[1])],
+                    'company_info': test_indices[i] if i < len(test_indices) else f'Company {i + 1}'
+                })
+        
+        # Sort by confidence descending and limit to 20
+        errors.sort(key=lambda x: x['confidence'], reverse=True)
+        error_cases_by_threshold[str(threshold)] = errors[:20]
+    
+    return error_cases_by_threshold
+
+def _compute_confidence_analysis_by_threshold(predictions, probabilities, true_labels):
+    """
+    Pre-compute confidence analysis for different thresholds
+    """
+    import numpy as np
+    from sklearn.metrics import accuracy_score, confusion_matrix
+    
+    predictions = np.array(predictions)
+    probabilities = np.array(probabilities)
+    true_labels = np.array(true_labels)
+    
+    # Define threshold ranges to pre-compute
+    thresholds = [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+    
+    confidence_analysis_by_threshold = {}
+    
+    # Calculate overall accuracy for comparison
+    overall_accuracy = accuracy_score(true_labels, predictions)
+    
+    for threshold in thresholds:
+        # Calculate confidence for each prediction (confidence in the actual prediction made)
+        confidences = np.array([probabilities[i][predictions[i]] for i in range(len(predictions))])
+        
+        # Filter high-confidence predictions
+        high_conf_mask = confidences >= threshold
+        high_conf_predictions = predictions[high_conf_mask]
+        high_conf_true_labels = true_labels[high_conf_mask]
+        
+        total_predictions = len(predictions)
+        high_confidence_count = int(np.sum(high_conf_mask))
+        
+        if high_confidence_count > 0:
+            high_conf_accuracy = accuracy_score(high_conf_true_labels, high_conf_predictions)
+            high_conf_conf_matrix = confusion_matrix(high_conf_true_labels, high_conf_predictions).tolist()
+            
+            # Class breakdown
+            class_0_mask = high_conf_predictions == 0
+            class_1_mask = high_conf_predictions == 1
+            
+            class_0_correct = int(np.sum((high_conf_predictions == high_conf_true_labels) & class_0_mask))
+            class_0_total = int(np.sum(class_0_mask))
+            class_1_correct = int(np.sum((high_conf_predictions == high_conf_true_labels) & class_1_mask))
+            class_1_total = int(np.sum(class_1_mask))
+            
+            class_breakdown = {
+                'class_0': {
+                    'correct': class_0_correct,
+                    'total': class_0_total,
+                    'accuracy': float(class_0_correct / class_0_total) if class_0_total > 0 else 0.0
+                },
+                'class_1': {
+                    'correct': class_1_correct,
+                    'total': class_1_total,
+                    'accuracy': float(class_1_correct / class_1_total) if class_1_total > 0 else 0.0
+                }
+            }
+            
+            precision_improvement = float((high_conf_accuracy - overall_accuracy) / overall_accuracy * 100) if overall_accuracy > 0 else 0.0
+        else:
+            high_conf_accuracy = 0.0
+            high_conf_conf_matrix = [[0, 0], [0, 0]]
+            class_breakdown = {
+                'class_0': {'correct': 0, 'total': 0, 'accuracy': 0.0},
+                'class_1': {'correct': 0, 'total': 0, 'accuracy': 0.0}
+            }
+            precision_improvement = 0.0
+        
+        coverage_percentage = float((high_confidence_count / total_predictions) * 100)
+        
+        confidence_analysis_by_threshold[str(threshold)] = {
+            'threshold': float(threshold),
+            'total_predictions': total_predictions,
+            'high_confidence_count': high_confidence_count,
+            'high_confidence_accuracy': float(high_conf_accuracy),
+            'high_confidence_confusion_matrix': high_conf_conf_matrix,
+            'class_breakdown': class_breakdown,
+            'coverage_percentage': coverage_percentage,
+            'precision_improvement': precision_improvement,
+            'overall_accuracy': float(overall_accuracy)
+        }
+    
+    return confidence_analysis_by_threshold
+
+def _add_shap_to_error_cases(error_cases_by_threshold, model, X_test, feature_cols):
+    """
+    Add pre-computed SHAP values to error cases to ensure consistency
+    """
+    import numpy as np
+    
+    try:
+        import shap
+        
+        # Create SHAP explainer
+        explainer = shap.TreeExplainer(model)
+        
+        # Get all unique error indices across all thresholds
+        all_error_indices = set()
+        for threshold_errors in error_cases_by_threshold.values():
+            for error in threshold_errors:
+                all_error_indices.add(error['index'])
+        
+        if len(all_error_indices) == 0:
+            logger.warning("No error indices found - returning original error cases")
+            return error_cases_by_threshold
+        
+        # Pre-compute SHAP values for all error cases
+        shap_cache = {}
+        if all_error_indices:
+            error_indices_list = list(all_error_indices)
+            X_error_cases = X_test.iloc[error_indices_list]
+            
+            # Calculate SHAP values for all error cases at once
+            shap_values = explainer.shap_values(X_error_cases)
+            
+            # If binary classification, shap_values might be a list with values for each class
+            if isinstance(shap_values, list):
+                # Use class 1 SHAP values (for binary classification)
+                shap_values_class1 = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+            else:
+                # If shap_values is a 3D array (samples, features, classes), select class 1
+                if len(shap_values.shape) == 3 and shap_values.shape[2] == 2:
+                    shap_values_class1 = shap_values[:, :, 1]  # Select class 1 (positive class)
+                else:
+                    shap_values_class1 = shap_values
+            
+            base_value = explainer.expected_value
+            if isinstance(base_value, (list, np.ndarray)):
+                base_value = base_value[1] if len(base_value) > 1 else base_value[0]
+            # Ensure base_value is a scalar
+            if hasattr(base_value, 'item'):
+                base_value = base_value.item()
+            
+            # Store SHAP values in cache
+            for i, original_idx in enumerate(error_indices_list):
+                shap_feature_values = []
+                for j, feature_name in enumerate(feature_cols):
+                    display_name = FEATURE_DISPLAY_NAMES.get(feature_name, feature_name)
+                    shap_feature_values.append({
+                        'feature': feature_name,
+                        'value': float(shap_values_class1[i][j].item() if hasattr(shap_values_class1[i][j], 'item') else shap_values_class1[i][j]),
+                        'display_name': display_name,
+                        'feature_value': float(X_error_cases.iloc[i, j])
+                    })
+                
+                # Sort by absolute SHAP value
+                shap_feature_values.sort(key=lambda x: abs(x['value']), reverse=True)
+                
+                # Calculate prediction value (class 1 probability)
+                prediction_value = float(base_value + sum(sv['value'] for sv in shap_feature_values))
+                
+                shap_cache[original_idx] = {
+                    'shap_values': shap_feature_values,
+                    'base_value': float(base_value),
+                    'prediction_value': prediction_value,
+                    'is_real_shap': True
+                }
+        
+        # Add SHAP values to error cases
+        error_cases_with_shap = {}
+        for threshold, threshold_errors in error_cases_by_threshold.items():
+            enhanced_errors = []
+            for error in threshold_errors:
+                enhanced_error = error.copy()
+                if error['index'] in shap_cache:
+                    enhanced_error['shap_analysis'] = shap_cache[error['index']]
+                enhanced_errors.append(enhanced_error)
+            error_cases_with_shap[threshold] = enhanced_errors
+        
+        logger.info(f"Pre-computed SHAP values for {len(shap_cache)} error cases")
+        return error_cases_with_shap
+        
+    except Exception as e:
+        logger.warning(f"Failed to pre-compute SHAP values: {e}")
+        # Return original error cases without SHAP if computation fails
+        return error_cases_by_threshold
+
 def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]:
     """
     Train RandomForestClassifier with specified hyperparameters and caching
@@ -389,6 +608,22 @@ def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]
         # Prepare test indices for SHAP analysis
         test_indices = X_test.index.tolist()
         
+        # Pre-compute error cases and confidence analysis for different thresholds
+        error_cases_by_threshold = _compute_error_cases_by_threshold(
+            y_pred, y_pred_proba, y_test.tolist(), test_indices
+        )
+        
+        confidence_analysis_by_threshold = _compute_confidence_analysis_by_threshold(
+            y_pred, y_pred_proba, y_test.tolist()
+        )
+        
+        # Pre-compute SHAP values for error cases to ensure consistency
+        logger.info("Starting SHAP pre-computation for error cases")
+        error_cases_with_shap = _add_shap_to_error_cases(
+            error_cases_by_threshold, model, X_test, feature_cols
+        )
+        logger.info("Completed SHAP pre-computation for error cases")
+        
         result = {
             'accuracy': float(accuracy),
             'classification_report': class_report,
@@ -398,6 +633,8 @@ def train_random_forest_model(hyperparameters: Dict[str, Any]) -> Dict[str, Any]
             'probabilities': y_pred_proba.tolist(),
             'test_indices': test_indices,
             'true_labels': y_test.tolist(),  # Add true labels for confidence analysis
+            'error_cases_by_threshold': error_cases_with_shap,  # Pre-computed error cases with SHAP
+            'confidence_analysis_by_threshold': confidence_analysis_by_threshold,  # Pre-computed confidence analysis
             'hyperparameters': hyperparameters,  # Store hyperparameters for SHAP analysis cache key
             'data_info': {
                 'data_path': data_path,
@@ -738,7 +975,7 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
         # Perform SHAP analysis on error cases
         shap_results = []
         
-        for i, idx in enumerate(error_indices[:5]):  # Limit to first 5 error cases for performance
+        for i, idx in enumerate(error_indices):  # Process all error cases
             if idx >= len(X_test):
                 logger.warning(f"Error index {idx} out of range for test data (size: {len(X_test)}), skipping")
                 continue
@@ -998,7 +1235,7 @@ def _perform_feature_importance_analysis(model_results: Dict[str, Any], error_in
         # Set random seed for reproducible results
         np.random.seed(42)
         
-        for i, idx in enumerate(error_indices[:5]):  # Limit to first 5 error cases
+        for i, idx in enumerate(error_indices):  # Process all error cases
             if idx >= len(predictions):
                 logger.warning(f"Error index {idx} out of range, skipping")
                 continue

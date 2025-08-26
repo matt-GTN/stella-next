@@ -19,9 +19,18 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en', onCo
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
 
-  // Calculate confidence analysis when threshold changes
+  // Use pre-computed confidence analysis when threshold changes
   useEffect(() => {
-    if (!modelResults?.probabilities || !modelResults?.predictions) return;
+    console.log('ConfidenceAnalyzer - ModelResults keys:', Object.keys(modelResults || {}));
+    console.log('Has confidence_analysis_by_threshold:', !!modelResults?.confidence_analysis_by_threshold);
+    
+    if (!modelResults?.confidence_analysis_by_threshold) {
+      console.log('No pre-computed confidence analysis found, falling back to old method');
+      // Fallback to old calculation if new structure not available
+      if (!modelResults?.probabilities || !modelResults?.predictions) return;
+    } else {
+      console.log('Using pre-computed confidence analysis');
+    }
 
     setIsAnalyzing(true);
     setAnalysisError(null);
@@ -29,13 +38,38 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en', onCo
     // Simulate analysis delay for better UX
     const timer = setTimeout(() => {
       try {
-        const analysis = calculateConfidenceAnalysis(
-          modelResults.probabilities,
-          modelResults.predictions,
-          modelResults.test_indices || [],
-          confidenceThreshold,
-          modelResults.true_labels || []
-        );
+        let analysis;
+        
+        if (modelResults?.confidence_analysis_by_threshold) {
+          // Use pre-computed confidence analysis
+          const availableThresholds = Object.keys(modelResults.confidence_analysis_by_threshold)
+            .map(t => parseFloat(t))
+            .sort((a, b) => a - b);
+          
+          // Find the threshold that's closest to but not greater than the current threshold
+          let selectedThreshold = availableThresholds[0];
+          for (const threshold of availableThresholds) {
+            if (threshold <= confidenceThreshold) {
+              selectedThreshold = threshold;
+            } else {
+              break;
+            }
+          }
+          
+          analysis = modelResults.confidence_analysis_by_threshold[selectedThreshold.toString()];
+          console.log(`Using pre-computed confidence analysis for threshold ${selectedThreshold} (requested: ${confidenceThreshold})`);
+        } else {
+          // Fallback to old calculation method
+          console.log('Using fallback confidence analysis calculation');
+          analysis = calculateConfidenceAnalysis(
+            modelResults.probabilities,
+            modelResults.predictions,
+            modelResults.test_indices || [],
+            confidenceThreshold,
+            modelResults.true_labels || []
+          );
+        }
+        
         setConfidenceAnalysis(analysis);
         setAnalysisError(null);
       } catch (error) {
@@ -55,8 +89,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en', onCo
   const calculateConfidenceAnalysis = (probabilities, predictions, testIndices, threshold, trueLabels) => {
     if (!probabilities || !predictions || !trueLabels) return null;
 
-    // Calculate confidence for each prediction (max probability)
-    const confidences = probabilities.map(prob => Math.max(...prob));
+    // Calculate confidence for each prediction (confidence in the actual prediction made)
+    const confidences = probabilities.map((prob, idx) => prob[predictions[idx]]);
     
     // Filter high-confidence predictions
     const highConfidenceIndices = confidences

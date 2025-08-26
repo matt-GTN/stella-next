@@ -79,6 +79,8 @@ function ModelingPageContent() {
         probabilities: result.data.probabilities || [],
         test_indices: result.data.test_indices || [],
         true_labels: result.data.true_labels || [], // Include real ground truth labels
+        error_cases_by_threshold: result.data.error_cases_by_threshold || {}, // Pre-computed error cases
+        confidence_analysis_by_threshold: result.data.confidence_analysis_by_threshold || {}, // Pre-computed confidence analysis
         hyperparameters: hyperparams // Include hyperparameters for SHAP analysis
       };
 

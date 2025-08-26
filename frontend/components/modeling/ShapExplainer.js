@@ -13,50 +13,99 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
 
   // Find high-confidence error cases when modelResults or confidenceThreshold change
   useEffect(() => {
-    if (modelResults?.predictions && modelResults?.probabilities && modelResults?.test_indices) {
-      const errors = [];
+    // Debug: Check what's in modelResults
+    console.log('ModelResults keys:', Object.keys(modelResults || {}));
+    console.log('Has error_cases_by_threshold:', !!modelResults?.error_cases_by_threshold);
+    console.log('Has predictions/probabilities:', !!modelResults?.predictions, !!modelResults?.probabilities);
+
+    let errors = [];
+
+    if (modelResults?.error_cases_by_threshold) {
+      // Use pre-computed error cases from backend
+      const availableThresholds = Object.keys(modelResults.error_cases_by_threshold)
+        .map(t => parseFloat(t))
+        .sort((a, b) => a - b);
+
+      console.log('Available thresholds:', availableThresholds);
+
+      // Find the threshold that's closest to but not greater than the current threshold
+      let selectedThreshold = availableThresholds[0];
+      for (const threshold of availableThresholds) {
+        if (threshold <= confidenceThreshold) {
+          selectedThreshold = threshold;
+        } else {
+          break;
+        }
+      }
+
+      errors = modelResults.error_cases_by_threshold[selectedThreshold.toString()] || [];
+
+      console.log(`Using pre-computed error cases for threshold ${selectedThreshold} (requested: ${confidenceThreshold})`);
+      console.log(`Found ${errors.length} error cases`);
+      if (errors.length > 0) {
+        console.log('First 3 error cases:');
+        errors.slice(0, 3).forEach((error, idx) => {
+          console.log(`  Case ${idx + 1}: ${error.company_info} - Prediction: ${error.predicted_label}, Actual: ${error.true_label}, Confidence: ${error.confidence.toFixed(3)}`);
+        });
+      }
+
+      setErrorCases(errors);
+    } else if (modelResults?.predictions && modelResults?.probabilities && modelResults?.test_indices) {
+      // Fallback to old calculation method if new structure not available
+      console.log('Using fallback calculation method');
 
       for (let i = 0; i < modelResults.predictions.length; i++) {
         const prediction = modelResults.predictions[i];
         const probabilities = modelResults.probabilities[i];
-        const maxProb = Math.max(...probabilities);
+        const predictionConfidence = probabilities[prediction];
         const actualLabel = modelResults.true_labels ? modelResults.true_labels[i] :
-          (modelResults.predictions[i] === 1 ? 0 : 1); // Fallback if no true labels
+          (modelResults.predictions[i] === 1 ? 0 : 1);
 
-        // Find high-confidence mistakes
-        if (maxProb >= confidenceThreshold && prediction !== actualLabel) {
+        if (predictionConfidence >= confidenceThreshold && prediction !== actualLabel) {
           errors.push({
-            index: i, // Use array index, not test_indices value
+            index: i,
             predicted_label: prediction,
             true_label: actualLabel,
-            confidence: maxProb,
-            company_info: modelResults.test_indices[i] || `Company ${i + 1}` // Use test_indices for display
+            confidence: predictionConfidence,
+            company_info: modelResults.test_indices[i] || `Company ${i + 1}`
           });
         }
       }
 
-      setErrorCases(errors.slice(0, 20)); // Limit to first 20 error cases
-      
-      // Reset selected error case if it's no longer valid with new threshold
-      if (errors.length > 0) {
-        const currentSelectedStillValid = selectedErrorCase && 
-          errors.some(e => e.index === selectedErrorCase.index);
-        
-        if (!currentSelectedStillValid) {
-          setSelectedErrorCase(errors[0]);
-          // Clear previous SHAP analysis when switching to new error cases
-          setShapAnalysis(null);
-        }
-      } else {
-        setSelectedErrorCase(null);
+      console.log(`Fallback: Found ${errors.length} error cases`);
+      setErrorCases(errors.slice(0, 20));
+    } else {
+      console.log('No valid data structure found');
+      setErrorCases([]);
+    }
+
+    // Reset selected error case if it's no longer valid with new threshold
+    if (errors.length > 0) {
+      const currentSelectedStillValid = selectedErrorCase &&
+        errors.some(e => e.index === selectedErrorCase.index);
+
+      if (!currentSelectedStillValid) {
+        setSelectedErrorCase(errors[0]);
+        // Clear previous SHAP analysis when switching to new error cases
         setShapAnalysis(null);
       }
+    } else {
+      setSelectedErrorCase(null);
+      setShapAnalysis(null);
     }
   }, [modelResults, confidenceThreshold]);
 
   const calculateShapValues = async (errorCase) => {
     if (!errorCase) return;
 
+    // Check if we already have pre-computed SHAP analysis
+    if (errorCase.shap_analysis) {
+      console.log('Using pre-computed SHAP analysis for', errorCase.company_info);
+      setShapAnalysis(errorCase.shap_analysis);
+      return;
+    }
+
+    console.log('No pre-computed SHAP analysis, making API call for', errorCase.company_info);
     setIsLoadingShap(true);
     setShapError(null);
 
@@ -154,8 +203,22 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
   };
 
   const handleErrorCaseChange = (errorCase) => {
+    console.log('Selected error case:', errorCase);
+    console.log('Error case probabilities:', errorCase.probabilities);
+    console.log('Error case confidence:', errorCase.confidence);
+    console.log('Expected class 1 probability:', errorCase.probabilities ? errorCase.probabilities[1] : 'N/A');
+    console.log('Has pre-computed SHAP:', !!errorCase.shap_analysis);
+    
     setSelectedErrorCase(errorCase);
-    setShapAnalysis(null);
+    
+    // Use pre-computed SHAP analysis if available
+    if (errorCase.shap_analysis) {
+      console.log('Using pre-computed SHAP analysis');
+      setShapAnalysis(errorCase.shap_analysis);
+    } else {
+      console.log('No pre-computed SHAP analysis, clearing current analysis');
+      setShapAnalysis(null);
+    }
   };
 
   const getShapWaterfallData = () => {
@@ -163,10 +226,10 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
 
     const values = shapAnalysis.shap_values;
     const baseValue = shapAnalysis.base_value || 0.5;
-    
-    // Use the backend's prediction value - it now consistently represents class 1 probability
-    const finalPrediction = shapAnalysis.prediction_value !== undefined 
-      ? shapAnalysis.prediction_value 
+
+    // Use the backend's prediction value - it represents class 1 probability
+    const finalPrediction = shapAnalysis.prediction_value !== undefined
+      ? shapAnalysis.prediction_value
       : baseValue + values.reduce((sum, v) => sum + v.value, 0);
 
     // Create waterfall data with proper cumulative calculation
@@ -186,7 +249,7 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
     waterfallValues.push(finalPrediction);
 
     // Create enhanced hover information - always shows class 1 probability
-    const predictionExplanation = language === 'fr' ? 
+    const predictionExplanation = language === 'fr' ?
       `Probabilité de sur-performance: ${(finalPrediction * 100).toFixed(1)}%` :
       `Probability of out-performance: ${(finalPrediction * 100).toFixed(1)}%`;
 
@@ -343,7 +406,7 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
               <div className="relative mt-3">
                 <div className="mb-2">
                   <span className="text-xs text-gray-600">
-                    {language === 'fr' 
+                    {language === 'fr'
                       ? `${errorCases.length} cas d'erreur au total - Sélectionnez dans la liste ci-dessous :`
                       : `${errorCases.length} total error cases - Select from list below:`
                     }
@@ -362,10 +425,10 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
                   </option>
                   {errorCases.map((errorCase, idx) => {
                     const isInGrid = idx < 8;
-                    const prefix = isInGrid 
+                    const prefix = isInGrid
                       ? (language === 'fr' ? '★ ' : '★ ') // Star for grid items
                       : '   '; // Indent for dropdown-only items
-                    
+
                     return (
                       <option key={errorCase.index} value={String(errorCase.index)}>
                         {prefix}{language === 'fr'
