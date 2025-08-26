@@ -189,10 +189,9 @@ export default function ResearchReportPage() {
                 >
                   <motion.button
                     onClick={handleDownload}
-                    className="w-4/5 ml-10 flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-2xl shadow-xl"
+                    className="w-4/5 ml-10 flex items-center justify-center space-x-3 bg-gradient-to-r from-purple-500 to-pink-700 text-white font-semibold py-4 px-6 rounded-2xl shadow-xl"
                     whileHover={{ 
                       scale: 1.02,
-                      background: "linear-gradient(to right, #7c3aed, #be185d)",
                       boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
                     }}
                     whileTap={{ scale: 0.98 }}
@@ -245,13 +244,9 @@ export default function ResearchReportPage() {
                           exit={{ opacity: 0 }}
                         >
                           <div className="text-center">
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                              className="mx-auto mb-3"
-                            >
-                              <Loader2 className="w-10 h-10 text-purple-600" />
-                            </motion.div>
+                        <div className="mx-auto mb-3">
+                          <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+                        </div>
                             <p className="text-sm text-gray-700 font-medium">
                               {language === 'fr' ? 'Chargement du document...' : 'Loading document...'}
                             </p>
