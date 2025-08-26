@@ -692,10 +692,10 @@ async def analyze_shap(request: Dict[str, Any]):
         logger.info(f"Performing SHAP analysis for {len(error_indices)} error cases")
         
         # Validate error indices
-        if len(error_indices) > 10:
+        if len(error_indices) > 20:
             raise HTTPException(
                 status_code=400,
-                detail="Maximum 10 error cases allowed for SHAP analysis"
+                detail="Maximum 20 error cases allowed for SHAP analysis"
             )
         
         # Generate session ID for caching

@@ -558,7 +558,7 @@ def analyze_confidence_threshold(model_results: Dict[str, Any], threshold: float
             'accuracy_improvement': float(high_conf_accuracy - overall_accuracy) if len(high_conf_predictions) > 0 else 0.0,
             'high_confidence_confusion_matrix': high_conf_conf_matrix,
             'class_breakdown': class_breakdown,
-            'error_indices': error_indices[:10],  # Limit to 10 for SHAP analysis
+            'error_indices': error_indices[:20],  # Limit to 20 for SHAP analysis
             'confidence_distribution': {
                 'mean': float(np.mean(confidences)),
                 'std': float(np.std(confidences)),
@@ -767,13 +767,15 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 logger.info(f"  - Feature names: {list(X_test.columns)}")
                 
                 # For binary classification with TreeExplainer, handle different return formats
+                # IMPORTANT: Use SHAP values for class 1 only (positive class for probability interpretation)
+                # The waterfall will always show probability of class 1 (out-performance)
                 if isinstance(shap_values, list):
                     logger.info(f"  - shap_values is list with {len(shap_values)} elements")
                     for i, sv in enumerate(shap_values):
                         logger.info(f"    - Element {i} shape: {np.array(sv).shape}")
                     
                     if len(shap_values) == 2:
-                        # Two classes - use class 1 values (positive class)
+                        # Two classes - always use class 1 values (positive class)
                         shap_vals_class1 = np.array(shap_values[1]).flatten()
                         logger.info(f"  - Using class 1 values, shape: {shap_vals_class1.shape}")
                     else:
@@ -785,7 +787,7 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                     if len(shap_values.shape) == 3:
                         logger.info(f"  - 3D SHAP values shape: {shap_values.shape}")
                         # For binary classification, SHAP values for both classes should sum to 0
-                        # We want the values that explain the prediction toward class 1
+                        # Always use class 1 values to show probability of out-performance
                         shap_vals_class0 = shap_values[0, :, 0]  # [sample, features, class_0]
                         shap_vals_class1 = shap_values[0, :, 1]  # [sample, features, class_1]
                         
@@ -795,7 +797,7 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                         logger.info(f"  - Sum class 1: {np.sum(shap_vals_class1)}")
                         logger.info(f"  - Sum both classes: {np.sum(shap_vals_class0) + np.sum(shap_vals_class1)}")
                         
-                        # Use class 1 values (positive class)
+                        # Always use class 1 values (positive class for probability interpretation)
                         shap_vals_class1 = shap_vals_class1
                         logger.info(f"  - Using class 1 values, shape: {shap_vals_class1.shape}")
                     else:
@@ -824,7 +826,8 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                         logger.error("Cannot resolve SHAP values mismatch, skipping sample")
                         continue
                 
-                # Get base value (expected value)
+                # Get base value (expected value) - always use class 1 expected value
+                # This gives the baseline probability for class 1 (out-performance)
                 expected_value = explainer.expected_value
                 logger.info(f"Expected value debug:")
                 logger.info(f"  - expected_value type: {type(expected_value)}")
@@ -833,7 +836,7 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 if isinstance(expected_value, (list, np.ndarray)):
                     logger.info(f"  - expected_value length: {len(expected_value)}")
                     if len(expected_value) > 1:
-                        base_value = float(expected_value[1])  # Use class 1 expected value
+                        base_value = float(expected_value[1])  # Always use class 1 expected value
                         logger.info(f"  - Using class 1 expected value: {base_value}")
                     else:
                         base_value = float(expected_value[0])
@@ -858,7 +861,21 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 logger.info(f"Sum of SHAP values: {np.sum(shap_vals_class1)}")
                 logger.info(f"Base value: {base_value}")
                 logger.info(f"Expected final prediction: {base_value + np.sum(shap_vals_class1)}")
-                logger.info(f"Actual model prediction probability: {prediction_proba[1]}")
+                logger.info(f"Actual model prediction probability for class 1: {prediction_proba[1]}")
+                logger.info(f"Model predicted class: {prediction} with confidence: {confidence}")
+                
+                # Verify SHAP consistency: base_value + shap_sum should equal prediction_proba[1]
+                calculated_prob = base_value + np.sum(shap_vals_class1)
+                expected_prob = prediction_proba[1]
+                prob_difference = abs(calculated_prob - expected_prob)
+                
+                if prob_difference > 0.001:
+                    logger.warning(f"SHAP calculation mismatch detected:")
+                    logger.warning(f"  - SHAP calculated: {calculated_prob:.6f}")
+                    logger.warning(f"  - Model probability: {expected_prob:.6f}")
+                    logger.warning(f"  - Difference: {prob_difference:.6f}")
+                else:
+                    logger.info(f"SHAP calculation verified: difference = {prob_difference:.6f}")
                 
                 # Create SHAP results with feature names
                 feature_names = X_test.columns.tolist()
@@ -891,8 +908,15 @@ def perform_shap_analysis(model_results: Dict[str, Any], error_indices: List[int
                 # Sort by absolute SHAP value
                 shap_feature_values.sort(key=lambda x: abs(x['value']), reverse=True)
                 
-                # Calculate prediction value
+                # Calculate prediction value - this should equal the model's probability for class 1
                 prediction_value = float(base_value + sum(sv['value'] for sv in shap_feature_values))
+                
+                # Verify it matches the model's class 1 probability
+                model_class1_prob = float(prediction_proba[1])
+                if abs(prediction_value - model_class1_prob) > 0.001:
+                    logger.warning(f"Prediction value mismatch: SHAP={prediction_value:.6f}, Model={model_class1_prob:.6f}")
+                    # Use the model's actual probability to ensure consistency
+                    prediction_value = model_class1_prob
                 
                 # Create company info
                 company_info = f"Company_{idx:03d}"

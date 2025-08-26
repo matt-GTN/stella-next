@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import PlotlyChart from "./PlotlyChart";
-import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw, CheckCircle } from "lucide-react";
+import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw, CheckCircle, Building2, Gauge, TrendingUp } from "lucide-react";
 
 export default function ShapExplainer({ modelResults, language, confidenceThreshold = 0.7 }) {
   const [selectedErrorCase, setSelectedErrorCase] = useState(null);
@@ -35,7 +35,7 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
         }
       }
 
-      setErrorCases(errors.slice(0, 10)); // Limit to first 10 error cases
+      setErrorCases(errors.slice(0, 20)); // Limit to first 20 error cases
       
       // Reset selected error case if it's no longer valid with new threshold
       if (errors.length > 0) {
@@ -163,6 +163,11 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
 
     const values = shapAnalysis.shap_values;
     const baseValue = shapAnalysis.base_value || 0.5;
+    
+    // Use the backend's prediction value - it now consistently represents class 1 probability
+    const finalPrediction = shapAnalysis.prediction_value !== undefined 
+      ? shapAnalysis.prediction_value 
+      : baseValue + values.reduce((sum, v) => sum + v.value, 0);
 
     // Create waterfall data with proper cumulative calculation
     const labels = [
@@ -172,17 +177,19 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
     ];
 
     const waterfallValues = [baseValue];
-    let cumulative = baseValue;
 
     values.forEach(v => {
       waterfallValues.push(v.value);
-      cumulative += v.value;
     });
 
-    // Final prediction value
-    waterfallValues.push(cumulative);
+    // Final prediction value - should correctly reflect probability of class 1
+    waterfallValues.push(finalPrediction);
 
-    // Create enhanced hover information
+    // Create enhanced hover information - always shows class 1 probability
+    const predictionExplanation = language === 'fr' ? 
+      `Probabilité de sur-performance: ${(finalPrediction * 100).toFixed(1)}%` :
+      `Probability of out-performance: ${(finalPrediction * 100).toFixed(1)}%`;
+
     const hoverTexts = [
       language === 'fr'
         ? `Probabilité de base du modèle: ${(baseValue * 100).toFixed(1)}%`
@@ -193,9 +200,7 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
           : (language === 'fr' ? 'diminue le risque' : 'decreases risk');
         return `${v.display_name}: ${impact} de ${Math.abs(v.value * 100).toFixed(2)}%`;
       }),
-      language === 'fr'
-        ? `Prédiction finale: ${(cumulative * 100).toFixed(1)}%`
-        : `Final prediction: ${(cumulative * 100).toFixed(1)}%`
+      predictionExplanation
     ];
 
     return [{
@@ -300,144 +305,179 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 space-y-6 gap-6">
+        {/* Two-pane layout: compact grid of cases (left), large details (right) */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {/* Error Case Grid Selector */}
-          <div className="grid grid-rows-1 sm:grid-rows-2 lg:grid-rows-3 gap-3">
-            {errorCases.slice(0, 6).map((errorCase, idx) => (
-              <button
-                key={errorCase.index}
-                onClick={() => handleErrorCaseChange(errorCase)}
-                className={`p-3 rounded-xl border transition-all duration-200 text-left ${selectedErrorCase?.index === errorCase.index
-                  ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500/40 shadow-xl'
-                  : 'bg-white/10 border-white/20 hover:bg-white/20 hover:border-orange-500/30'
-                  }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-800">
-                    {language === 'fr' ? `Cas ${idx + 1}` : `Case ${idx + 1}`}
-                  </span>
-                  <div className="flex items-center space-x-1">
-                    <div className={`w-2 h-2 rounded-full ${errorCase.confidence >= 0.9 ? 'bg-red-500' :
-                      errorCase.confidence >= 0.8 ? 'bg-orange-500' : 'bg-yellow-500'
-                      }`}></div>
-                    <span className="text-xs font-bold text-gray-700">
-                      {(errorCase.confidence * 100).toFixed(0)}%
+          <div className="md:col-span-2">
+            <div className="grid grid-cols-2 gap-3">
+              {errorCases.slice(0, 8).map((errorCase, idx) => (
+                <button
+                  key={errorCase.index}
+                  onClick={() => handleErrorCaseChange(errorCase)}
+                  className={`group p-2 rounded-lg border transition-all duration-200 text-left ${selectedErrorCase?.index === errorCase.index
+                    ? 'bg-gradient-to-br from-orange-500/20 to-red-500/20 border-orange-500/40 shadow-lg'
+                    : 'bg-white/10 border-white/20 hover:bg-white/20 hover:border-orange-500/30'
+                    }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wide font-semibold text-gray-700">
+                      {language === 'fr' ? `Cas ${idx + 1}` : `Case ${idx + 1}`}
                     </span>
+                    <div className="flex items-center space-x-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${errorCase.confidence >= 0.9 ? 'bg-red-500' : errorCase.confidence >= 0.8 ? 'bg-orange-500' : 'bg-yellow-500'}`}></div>
+                      <span className="text-[10px] font-bold text-gray-700">
+                        {(errorCase.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
                   </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-800 truncate max-w-[70%]">{errorCase.company_info}</span>
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 opacity-80" />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Dropdown for all cases (always show if more than 8 cases) */}
+            {errorCases.length > 8 && (
+              <div className="relative mt-3">
+                <div className="mb-2">
+                  <span className="text-xs text-gray-600">
+                    {language === 'fr' 
+                      ? `${errorCases.length} cas d'erreur au total - Sélectionnez dans la liste ci-dessous :`
+                      : `${errorCases.length} total error cases - Select from list below:`
+                    }
+                  </span>
                 </div>
-                <div className="text-xs text-gray-600 mb-1">{errorCase.company_info}</div>
-              </button>
-            ))}
+                <select
+                  value={selectedErrorCase?.index || ''}
+                  onChange={(e) => {
+                    const errorCase = errorCases.find(ec => String(ec.index) === e.target.value);
+                    handleErrorCaseChange(errorCase);
+                  }}
+                  className="w-full p-2 bg-white/10 border border-white/20 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 appearance-none"
+                >
+                  <option value="">
+                    {language === 'fr' ? 'Tous les cas d\'erreur disponibles...' : 'All available error cases...'}
+                  </option>
+                  {errorCases.map((errorCase, idx) => {
+                    const isInGrid = idx < 8;
+                    const prefix = isInGrid 
+                      ? (language === 'fr' ? '★ ' : '★ ') // Star for grid items
+                      : '   '; // Indent for dropdown-only items
+                    
+                    return (
+                      <option key={errorCase.index} value={String(errorCase.index)}>
+                        {prefix}{language === 'fr'
+                          ? `Cas ${idx + 1}: ${errorCase.company_info} (${(errorCase.confidence * 100).toFixed(1)}%)`
+                          : `Case ${idx + 1}: ${errorCase.company_info} (${(errorCase.confidence * 100).toFixed(1)}%)`}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="absolute right-3 top-[50px] -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+              </div>
+            )}
           </div>
 
-          
-
           {/* Selected Error Case Details */}
-          {selectedErrorCase && (
-            <div className="backdrop-blur-lg shadow-xl bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-              <h4 className="text-sm font-semibold text-red-800 mb-3">
-                {language === 'fr' ? 'Détails de l\'Erreur Sélectionnée' : 'Selected Error Details'}
-              </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">
-                      {language === 'fr' ? 'Entreprise:' : 'Company:'}
-                    </span>
-                    <span className="font-medium text-gray-800">{selectedErrorCase.company_info}</span>
+          <div className="md:col-span-3">
+            {selectedErrorCase ? (
+              <div className="backdrop-blur-lg shadow-xl bg-white/10 border border-white/20 rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 flex items-center justify-center">
+                      <AlertTriangle className="w-5 h-5 text-white" />
+                    </div>
+                    <h4 className="text-base font-semibold text-gray-800">
+                      {language === 'fr' ? 'Détails de l\'Erreur Sélectionnée' : 'Selected Error Details'}
+                    </h4>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">
-                      {language === 'fr' ? 'Confiance:' : 'Confidence:'}
-                    </span>
-                    <span className="font-medium text-orange-700">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-600">{language === 'fr' ? 'Confiance' : 'Confidence'}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-500/15 text-orange-700 border border-orange-500/30">
                       {(selectedErrorCase.confidence * 100).toFixed(1)}%
                     </span>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">
-                      {language === 'fr' ? 'Prédit:' : 'Predicted:'}
-                    </span>
-                    <span className="font-medium text-red-700">
-                      {language === 'fr'
-                        ? (selectedErrorCase.predicted_label === 0 ? 'Sous-perf.' : 'Sur-perf.')
-                        : (selectedErrorCase.predicted_label === 0 ? 'Under-perf.' : 'Out-perf.')
-                      }
-                    </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <Building2 className="w-5 h-5 text-gray-700" />
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-gray-500">{language === 'fr' ? 'Entreprise' : 'Company'}</div>
+                      <div className="text-sm font-medium text-gray-800">{selectedErrorCase.company_info}</div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">
-                      {language === 'fr' ? 'Réel:' : 'Actual:'}
-                    </span>
-                    <span className="font-medium text-green-700">
-                      {language === 'fr'
-                        ? (selectedErrorCase.true_label === 0 ? 'Sous-perf.' : 'Sur-perf.')
-                        : (selectedErrorCase.true_label === 0 ? 'Under-perf.' : 'Out-perf.')
-                      }
-                    </span>
+
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <Gauge className="w-5 h-5 text-orange-600" />
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-gray-500">{language === 'fr' ? 'Confiance' : 'Confidence'}</div>
+                      <div className="text-sm font-medium text-orange-700">{(selectedErrorCase.confidence * 100).toFixed(1)}%</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    {selectedErrorCase.predicted_label === 1 ? (
+                      <TrendingUp className="w-5 h-5 text-red-600" />
+                    ) : (
+                      <TrendingDown className="w-5 h-5 text-red-600" />
+                    )}
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-gray-500">{language === 'fr' ? 'Prédit' : 'Predicted'}</div>
+                      <div className="text-sm font-medium text-red-700">
+                        {language === 'fr' ? (selectedErrorCase.predicted_label === 0 ? 'Sous-perf.' : 'Sur-perf.') : (selectedErrorCase.predicted_label === 0 ? 'Under-perf.' : 'Out-perf.')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-3 rounded-lg bg-white/5 border border-white/10">
+                    {selectedErrorCase.true_label === 1 ? (
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <TrendingDown className="w-5 h-5 text-green-600" />
+                    )}
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-gray-500">{language === 'fr' ? 'Réel' : 'Actual'}</div>
+                      <div className="text-sm font-medium text-green-700">
+                        {language === 'fr' ? (selectedErrorCase.true_label === 0 ? 'Sous-perf.' : 'Sur-perf.') : (selectedErrorCase.true_label === 0 ? 'Under-perf.' : 'Out-perf.')}
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                {/* Analyze button inside details to emphasize flow */}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => calculateShapValues(selectedErrorCase)}
+                    disabled={!selectedErrorCase || isLoadingShap}
+                    className={`inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-300 ${!selectedErrorCase || isLoadingShap
+                      ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
+                      : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-orange-500/25'
+                      }`}
+                  >
+                    {isLoadingShap ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>{language === 'fr' ? 'Analyse en cours…' : 'Analyzing…'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4" />
+                        <span>{language === 'fr' ? 'Analyser avec SHAP' : 'Analyze with SHAP'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Dropdown for additional cases */}
-          {errorCases.length > 6 && (
-            <div className="relative">
-              <select
-                value={selectedErrorCase?.index || ''}
-                onChange={(e) => {
-                  const errorCase = errorCases.find(ec => ec.index === e.target.value);
-                  handleErrorCaseChange(errorCase);
-                }}
-                className="w-full p-3 bg-white/10 border border-white/20 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 appearance-none"
-              >
-                <option value="">
-                  {language === 'fr' ? 'Ou sélectionner parmi tous les cas...' : 'Or select from all cases...'}
-                </option>
-                {errorCases.map((errorCase, idx) => (
-                  <option key={errorCase.index} value={errorCase.index}>
-                    {language === 'fr'
-                      ? `Cas ${idx + 1}: ${errorCase.company_info} (Confiance: ${(errorCase.confidence * 100).toFixed(1)}%)`
-                      : `Case ${idx + 1}: ${errorCase.company_info} (Confidence: ${(errorCase.confidence * 100).toFixed(1)}%)`
-                    }
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none" />
-            </div>
-          )}
-        </div>
-
-        {/* Analysis Button */}
-        <div className="flex justify-center">
-          <button
-            onClick={() => calculateShapValues(selectedErrorCase)}
-            disabled={!selectedErrorCase || isLoadingShap}
-            className={`inline-flex items-center justify-center space-x-3 px-8 py-4 mt-4 rounded-xl font-semibold text-lg transition-all duration-300 ${!selectedErrorCase || isLoadingShap
-              ? 'bg-gradient-to-r from-gray-400 to-gray-500 text-white cursor-not-allowed'
-              : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white transform hover:scale-105 shadow-xl hover:shadow-orange-500/25'
-              }`}
-          >
-            {isLoadingShap ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>{language === 'fr' ? 'Analyse en cours...' : 'Analyzing...'}</span>
-              </>
             ) : (
-              <>
-                <Brain className="w-5 h-5" />
-                <span>{language === 'fr' ? 'Analyser avec SHAP' : 'Analyze with SHAP'}</span>
-              </>
+              <div className="p-5 rounded-2xl border border-white/20 bg-white/5 text-gray-600 text-sm">
+                {language === 'fr' ? 'Sélectionnez un cas pour voir les détails.' : 'Select a case to view details.'}
+              </div>
             )}
-          </button>
-
-          
+          </div>
         </div>
-
-
       </div>
 
       {/* SHAP Waterfall Visualization */}
