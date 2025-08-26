@@ -1,39 +1,39 @@
 /**
- * Message data processing utilities for backward compatibility
- * Ensures tool calls are properly formatted for the new graph visualization system
+ * Utilitaires de traitement des données de message pour la rétrocompatibilité
+ * Assure que les appels d'outils sont correctement formatés pour le nouveau système de visualisation graphique
  */
 
 /**
- * Normalize tool calls to ensure compatibility with both old and new visualization systems
- * @param {Array} toolCalls - Raw tool calls from various sources
- * @returns {Array} Normalized tool calls
+ * Normalise les appels d'outils pour assurer la compatibilité avec les anciens et nouveaux systèmes de visualisation
+ * @param {Array} toolCalls - Appels d'outils bruts provenant de diverses sources
+ * @returns {Array} Appels d'outils normalisés
  */
 export function normalizeToolCalls(toolCalls = []) {
-  // Ensure toolCalls is defined and is an array
+  // S'assurer que toolCalls est défini et est un tableau
   if (toolCalls === undefined || toolCalls === null) {
     return [];
   }
-  
+
   if (!Array.isArray(toolCalls)) {
-    console.warn('Tool calls is not an array:', toolCalls);
+    console.warn('Les appels d\'outils ne sont pas un tableau:', toolCalls);
     return [];
   }
 
-  // Create a new array to avoid any reference issues and temporal dead zone
+  // Créer un nouveau tableau pour éviter les problèmes de référence et la zone morte temporelle
   let toolCallsArray;
   try {
     toolCallsArray = Array.from(toolCalls);
   } catch (error) {
-    console.error('Error creating array from toolCalls:', error);
+    console.error('Erreur lors de la création du tableau à partir de toolCalls:', error);
     return [];
   }
-  
-  // Additional safety check
+
+  // Vérification de sécurité supplémentaire
   if (!toolCallsArray || !Array.isArray(toolCallsArray)) {
-    console.error('Failed to create safe array from toolCalls');
+    console.error('Échec de la création d\'un tableau sécurisé à partir de toolCalls');
     return [];
   }
-  
+
   return toolCallsArray.map((toolCall, index) => {
     if (!toolCall || typeof toolCall !== 'object') {
       console.warn(`Invalid tool call at index ${index}:`, toolCall);
@@ -45,24 +45,24 @@ export function normalizeToolCalls(toolCalls = []) {
       };
     }
 
-    // Handle different formats from backend
+    // Gérer différents formats provenant du backend
     const normalized = {
-      // Name handling - support multiple formats
-      name: toolCall.name || toolCall.tool_name || toolCall.function?.name || toolCall.tool || `unknown_tool_${index}`,
-      
-      // Arguments handling - support multiple formats
+      // Gestion du nom - support de multiples formats
+      name: toolCall.name || toolCall.tool_name || toolCall.function?.name || toolCall.tool || `outil_inconnu_${index}`,
+
+      // Gestion des arguments - support de multiples formats
       args: toolCall.args || toolCall.arguments || toolCall.input || toolCall.parameters || {},
-      
-      // Status and execution info
+
+      // Statut et informations d'exécution
       status: toolCall.status || (toolCall.error ? 'error' : 'completed'),
       error: toolCall.error || null,
       result: toolCall.result || toolCall.output || null,
-      
-      // Timing information
+
+      // Informations de timing
       executionTime: toolCall.executionTime || toolCall.execution_time || toolCall.duration || 0,
       timestamp: toolCall.timestamp || Date.now(),
-      
-      // Additional metadata
+
+      // Métadonnées supplémentaires
       index: index,
       sessionId: toolCall.sessionId || null
     };
@@ -72,9 +72,9 @@ export function normalizeToolCalls(toolCalls = []) {
 }
 
 /**
- * Validate message data for graph visualization compatibility
- * @param {Object} message - Message object
- * @returns {Object} Validation result with normalized data
+ * Valide les données de message pour la compatibilité avec la visualisation graphique
+ * @param {Object} message - Objet message
+ * @returns {Object} Résultat de validation avec données normalisées
  */
 export function validateMessageForVisualization(message) {
   const validation = {
@@ -84,54 +84,54 @@ export function validateMessageForVisualization(message) {
     normalizedMessage: { ...message }
   };
 
-  // Validate message structure
+  // Valider la structure du message
   if (!message || typeof message !== 'object') {
     validation.isValid = false;
-    validation.errors.push('Message is not a valid object');
+    validation.errors.push('Le message n\'est pas un objet valide');
     return validation;
   }
 
-  // Normalize tool calls if present (handle both toolCalls and tool_calls formats)
+  // Normaliser les appels d'outils si présents (gérer les formats toolCalls et tool_calls)
   const toolCalls = message.toolCalls || message.tool_calls;
   if (toolCalls) {
     try {
       validation.normalizedMessage.toolCalls = normalizeToolCalls(toolCalls);
-      
-      // Check for any invalid tool calls
-      const invalidCalls = validation.normalizedMessage.toolCalls.filter(tc => tc.status === 'error' && tc.error === 'Invalid tool call format');
+
+      // Vérifier les appels d'outils invalides
+      const invalidCalls = validation.normalizedMessage.toolCalls.filter(tc => tc.status === 'error' && tc.error === 'Format d\'appel d\'outil invalide');
       if (invalidCalls.length > 0) {
-        validation.warnings.push(`${invalidCalls.length} tool calls had invalid format and were normalized`);
+        validation.warnings.push(`${invalidCalls.length} appels d'outils avaient un format invalide et ont été normalisés`);
       }
     } catch (error) {
-      validation.errors.push(`Error normalizing tool calls: ${error.message}`);
+      validation.errors.push(`Erreur lors de la normalisation des appels d'outils: ${error.message}`);
       validation.normalizedMessage.toolCalls = [];
     }
   }
 
-  // Ensure each message has a unique ID for visualization
+  // S'assurer que chaque message a un ID unique pour la visualisation
   if (!validation.normalizedMessage.id) {
-    validation.normalizedMessage.id = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    validation.warnings.push('Message ID was missing, generated unique ID');
+    validation.normalizedMessage.id = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    validation.warnings.push('L\'ID du message était manquant, ID unique généré');
   }
 
-  // Ensure sessionId is present for graph visualization - use message ID as unique identifier
+  // S'assurer que sessionId est présent pour la visualisation graphique - utiliser l'ID du message comme identifiant unique
   if (!validation.normalizedMessage.sessionId) {
     validation.normalizedMessage.sessionId = validation.normalizedMessage.id;
-    validation.warnings.push('SessionId was missing, using message ID as unique session identifier');
+    validation.warnings.push('SessionId était manquant, utilisation de l\'ID du message comme identifiant de session unique');
   }
 
   return validation;
 }
 
 /**
- * Process message for backward compatibility with existing chat system
- * @param {Object} message - Raw message from API or storage
- * @returns {Object} Processed message ready for rendering
+ * Traite le message pour la rétrocompatibilité avec le système de chat existant
+ * @param {Object} message - Message brut provenant de l'API ou du stockage
+ * @returns {Object} Message traité prêt pour le rendu
  */
 export function processMessageForChat(message) {
-  // Ensure message exists and has basic structure
+  // S'assurer que le message existe et a une structure de base
   if (!message || typeof message !== 'object') {
-    console.error('Invalid message provided to processMessageForChat:', message);
+    console.error('Message invalide fourni à processMessageForChat:', message);
     return {
       id: 'error-' + Date.now(),
       type: 'assistant',
@@ -141,15 +141,15 @@ export function processMessageForChat(message) {
       finalContent: '',
       timestamp: new Date(),
       hasVisualizationError: true,
-      visualizationErrors: ['Invalid message object']
+      visualizationErrors: ['Objet message invalide']
     };
   }
-  
+
   const validation = validateMessageForVisualization(message);
-  
+
   if (!validation.isValid) {
-    console.error('Message validation failed:', validation.errors);
-    // Return a safe fallback message
+    console.error('Échec de la validation du message:', validation.errors);
+    // Retourner un message de secours sécurisé
     return {
       ...message,
       toolCalls: [],
@@ -161,13 +161,13 @@ export function processMessageForChat(message) {
   }
 
   if (validation.warnings.length > 0) {
-    console.warn('Message processing warnings:', validation.warnings);
+    console.warn('Avertissements de traitement du message:', validation.warnings);
   }
 
-  // Handle backward compatibility for old field names
+  // Gérer la rétrocompatibilité pour les anciens noms de champs
   const normalizedMessage = { ...validation.normalizedMessage };
-  
-  // Convert old field names to new format
+
+  // Convertir les anciens noms de champs vers le nouveau format
   if (message.role && !normalizedMessage.type) {
     normalizedMessage.type = message.role;
   }
@@ -178,50 +178,42 @@ export function processMessageForChat(message) {
     normalizedMessage.toolCalls = normalizeToolCalls(message.tools);
   }
 
-  // Ensure critical fields are initialized
+  // S'assurer que les champs critiques sont initialisés
   const processedMessage = {
     ...normalizedMessage,
     toolCalls: normalizedMessage.toolCalls || [],
     initialContent: normalizedMessage.initialContent || '',
     finalContent: normalizedMessage.finalContent || '',
-    // Ensure each message has a unique ID for trace visualization
-    id: normalizedMessage.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    sessionId: normalizedMessage.sessionId || normalizedMessage.id || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    // S'assurer que chaque message a un ID unique pour la visualisation de trace
+    id: normalizedMessage.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    sessionId: normalizedMessage.sessionId || normalizedMessage.id || `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
   };
 
   return processedMessage;
 }
 
 /**
- * Check if a message has agent activity (tool calls or reasoning content)
- * @param {Object} message - Message object
- * @param {number} messageIndex - Index of message in conversation (optional)
- * @returns {boolean} True if message has agent activity
+ * Vérifie si un message a une activité d'agent (appels d'outils ou contenu de raisonnement)
+ * @param {Object} message - Objet message
+ * @param {number} messageIndex - Index du message dans la conversation (optionnel)
+ * @returns {boolean} True si le message a une activité d'agent
  */
 export function hasAgentActivity(message, messageIndex = null) {
-  // Show agent decision path for all assistant messages except the first one
+  // Afficher le chemin de décision de l'agent pour tous les messages d'assistant sauf le premier
   if (!message || message.type !== 'assistant') {
     return false;
   }
 
-  // Exclude the first assistant message (greeting) - use multiple indicators
-  const isFirstAssistantMessage = messageIndex === 1 || // Second message overall (after user's first)
-                                  messageIndex === 0 || // Could be first if no user message yet
-                                  message.isInitialGreeting === true || // Explicit flag if backend sets it
-                                  (!message.toolCalls || message.toolCalls.length === 0) && 
-                                  (!message.initialContent && !message.finalContent) &&
-                                  message.content && message.content.length < 200; // Short simple message
-  
-  // Additional check: if message has no tool calls and is very short, might be greeting
+  // Vérification supplémentaire : si le message n'a pas d'appels d'outils et est très court, pourrait être un salut
   const isLikelyGreeting = (!message.toolCalls || message.toolCalls.length === 0) &&
-                           (!message.initialContent && !message.finalContent) &&
-                           message.content && message.content.length < 150;
+    (!message.initialContent && !message.finalContent) &&
+    message.content && message.content.length < 150;
 
-  // Only exclude if it's likely the first message AND looks like a greeting
+  // Exclure seulement si c'est probablement le premier message ET ressemble à un salut
   if ((messageIndex === 0 || messageIndex === 1) && isLikelyGreeting) {
     return false;
   }
 
-  // Show for all other assistant messages to allow viewing the agent's decision path
+  // Afficher pour tous les autres messages d'assistant pour permettre de voir le chemin de décision de l'agent
   return true;
 }

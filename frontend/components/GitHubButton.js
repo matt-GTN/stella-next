@@ -1,4 +1,4 @@
-// components/GitHubButton.js
+// components/GitHubButton.js - Bouton GitHub avec compteur d'étoiles
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -6,12 +6,20 @@ import { motion } from 'motion/react';
 import { Github, Star } from 'lucide-react';
 import Link from 'next/link';
 
+/**
+ * Composant bouton GitHub avec affichage du nombre d'étoiles
+ * @param {string} username - Nom d'utilisateur GitHub
+ * @param {string} repository - Nom du dépôt
+ * @param {string} className - Classes CSS supplémentaires
+ * @param {boolean} isCardActive - État d'activation de la carte
+ * @param {string} variant - Variante d'affichage ('fixed' ou 'inline')
+ */
 const GitHubButton = ({
   username = 'matt-GTN',
   repository = 'portfolio',
   className = '',
   isCardActive = false,
-  variant = 'fixed' // 'fixed' or 'inline'
+  variant = 'fixed' // 'fixed' ou 'inline'
 }) => {
   const [stars, setStars] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,38 +27,27 @@ const GitHubButton = ({
 
   useEffect(() => {
     const fetchStars = async () => {
-      console.log(`🔍 Fetching stars for ${username}/${repository}...`);
-
       try {
         const response = await fetch(`https://api.github.com/repos/${username}/${repository}`);
-        console.log(`📡 GitHub API response status:`, response.status);
 
         if (response.ok) {
           const data = await response.json();
-          console.log(`⭐ Stars found:`, data.stargazers_count);
-          console.log(`📊 Full repo data:`, {
-            name: data.name,
-            stars: data.stargazers_count,
-            forks: data.forks_count,
-            private: data.private
-          });
           setStars(data.stargazers_count);
         } else if (response.status === 403) {
-          console.warn(`⚠️ GitHub API rate limit reached (403). Using fallback data.`);
           setError(true);
         }
       } catch (err) {
-        console.error(`💥 GitHub API fetch error:`, err);
+        console.error('Erreur de récupération API GitHub:', err);
         setError(true);
       } finally {
         setLoading(false);
-        console.log(`✅ Finished loading stars for ${username}/${repository}`);
       }
     };
 
     fetchStars();
   }, [username, repository]);
 
+  // Formater le nombre d'étoiles pour l'affichage
   const formatStars = (count) => {
     if (count >= 1000) {
       return `${(count / 1000).toFixed(1)}k`;

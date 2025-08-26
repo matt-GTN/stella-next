@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 
-// Styles CSS pour le code highlighting
+// Styles CSS pour la coloration syntaxique du code
 import 'highlight.js/styles/github.css';
 
 import dynamic from 'next/dynamic';
@@ -22,7 +22,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { processMessageForChat, hasAgentActivity as checkAgentActivity } from "@/utils/messageDataProcessor";
 
 
-// Lazy-load Chart to avoid SSR issues
+// Chargement paresseux du Chart pour éviter les problèmes SSR
 const Chart = dynamic(() => import("@/components/charts/Chart"), { ssr: false });
 
 export default function ChatMessage({ message: rawMessage, messageIndex = null }) {
@@ -33,10 +33,10 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
   const [showFinalContent, setShowFinalContent] = useState(false);
   const chartDownloaders = useRef({});
 
-  // Process message for backward compatibility and validation
+  // Traiter le message pour la rétrocompatibilité et la validation
   const message = processMessageForChat(rawMessage);
 
-  // Derive full tool list from multiple possible fields for unused nodes - optimized
+  // Dériver la liste complète des outils à partir de plusieurs champs possibles pour les nœuds inutilisés - optimisé
   const allToolNames = React.useMemo(() => {
     const out = [];
     const pushArray = (arr) => {
@@ -72,12 +72,12 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
   const isUser = message.type === 'user';
   const isAssistant = message.type === 'assistant';
 
-  // Check if this message has agent activity using the utility function
+  // Vérifier si ce message a une activité d'agent en utilisant la fonction utilitaire
   const hasAgentActivity = checkAgentActivity(message, messageIndex);
 
-  // Check if message is completely finished (not streaming, processing, or waiting for content)
+  // Vérifier si le message est complètement terminé (pas en streaming, traitement, ou en attente de contenu)
   const isMessageFinished = React.useMemo(() => {
-    // Message is not finished if it's still streaming or processing
+    // Le message n'est pas terminé s'il est encore en streaming ou en traitement
     if (message.isStreaming || message.isProcessing) {
       return false;
     }

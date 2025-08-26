@@ -2,8 +2,13 @@
 
 import { motion } from "motion/react";
 
+/**
+ * Composant Spinner animé pour indiquer les états de chargement
+ * @param {string} size - Taille du spinner (sm, md, lg)
+ * @param {string} color - Couleur du spinner (stella, gray, white)
+ */
 export default function Spinner({ size = "md", color = "stella" }) {
-  // Size configurations
+  // Configurations de taille
   const sizeConfig = {
     sm: {
       containerSize: "w-6 h-6",
@@ -19,9 +24,9 @@ export default function Spinner({ size = "md", color = "stella" }) {
     }
   };
 
-  // Color configurations
+  // Configurations de couleur
   const colorConfig = {
-    stella: "bg-blue-500", // Stella blue
+    stella: "bg-blue-500", // Bleu Stella
     gray: "bg-gray-600",
     white: "bg-white"
   };

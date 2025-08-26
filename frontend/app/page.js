@@ -4,6 +4,12 @@ import { useState } from "react";
 import ChatNavbar from "@/components/chat/ChatNavbar";
 import ChatContainer from "@/components/chat/ChatContainer";
 import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
+import GitHubButton from '@/components/GitHubButton';
+
+/**
+ * Page d'accueil principale de l'application Stella
+ * Gère l'interface de chat avec l'assistant financier IA
+ */
 export default function Home() {
   const [messages, setMessages] = useState([
     {
@@ -23,6 +29,10 @@ export default function Home() {
   const [sessionId, setSessionId] = useState(null); // Gérer l'ID de session pour maintenir le contexte
   const [messageCounter, setMessageCounter] = useState(2); // Compteur pour les IDs de messages
 
+  /**
+   * Envoie un message à l'assistant Stella et gère la réponse en streaming
+   * @param {string} content - Contenu du message utilisateur
+   */
   const sendMessage = async (content) => {
     // Générer des IDs uniques et séquentiels
     const userMessageId = `user-${messageCounter}`;
@@ -399,6 +409,14 @@ export default function Home() {
         />
       </div>
 
+
+      {/* GitHub Button - Top Left */}
+      <GitHubButton 
+        username="matt-GTN" 
+        repository="stella-next" 
+        variant="fixed"
+        className="!top-6 !right-6 !left-auto"
+      />
 
       {/* Navbar */}
       <ChatNavbar />

@@ -129,28 +129,19 @@ const ThreadsBackground = ({
   const animationFrameId = useRef();
 
   useEffect(() => {
-    console.log("ThreadsBackground mounted with props:", { color, amplitude, distance, enableMouseInteraction });
-    
     if (!containerRef.current) {
-      console.log("No container ref in ThreadsBackground");
       return;
     }
     const container = containerRef.current;
-    console.log("ThreadsBackground container:", container, "dimensions:", {
-      width: container.clientWidth,
-      height: container.clientHeight
-    });
 
     let renderer, gl;
     try {
-      console.log("Creating ThreadsBackground renderer...");
       renderer = new Renderer({ 
         alpha: true,
         antialias: true,
         powerPreference: "high-performance"
       });
       gl = renderer.gl;
-      console.log("ThreadsBackground WebGL context created:", gl.canvas.width, "x", gl.canvas.height);
       
       gl.clearColor(1, 1, 1, 1);
       gl.enable(gl.BLEND);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple FastAPI API for Stella Financial Assistant
-Just exposes the existing LangGraph agent with basic error handling
+API FastAPI simple pour l'Assistant Financier Stella
+Expose simplement l'agent LangGraph existant avec gestion d'erreurs de base
 """
 
 import os
@@ -13,7 +13,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-# Add agent directory to Python path
+# Ajouter le répertoire agent au chemin Python
 agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
 sys.path.insert(0, agent_dir)
 
@@ -25,35 +25,35 @@ import uvicorn
 from src.fetch_data import APILimitError
 
 
-# Change to the directory containing the agent and import
+# Changer vers le répertoire contenant l'agent et importer
 original_dir = os.getcwd()
 agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
 os.chdir(agent_dir)
 
-# Import your existing agent from the current agent directory
+# Importer l'agent existant depuis le répertoire agent actuel
 import agent as agent_module
 from langchain_core.messages import HumanMessage
 from agent import generate_trace_animation_frames, get_langsmith_trace_data
 import base64
 
-# Get the app from the agent module
+# Obtenir l'application depuis le module agent
 stella_agent = agent_module.app
 
-# Change back to original directory
+# Revenir au répertoire original
 os.chdir(original_dir)
 
-# Setup logging
+# Configuration du logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FastAPI app
+# Application FastAPI
 app = FastAPI(
     title="Stella API",
-    description="Simple API for Stella Financial Assistant",
+    description="API simple pour l'Assistant Financier Stella",
     version="1.0.0"
 )
 
-# CORS for your frontend
+# CORS pour le frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -66,7 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request/Response models
+# Modèles de requête/réponse
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
@@ -108,15 +108,15 @@ class LangSmithTraceResponse(BaseModel):
     status: str
     timestamp: str
 
-# Health check
+# Vérification de santé
 @app.get("/health")
 async def health_check():
-    """Simple health check endpoint"""
+    """Point de terminaison simple de vérification de santé"""
     return {"status": "healthy", "service": "stella-api"}
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Point de terminaison racine"""
     return {
         "message": "Stella Financial Assistant API",
         "version": "1.0.0",
@@ -128,11 +128,11 @@ async def root():
         }
     }
 
-# Streaming chat endpoint with SSE
+# Point de terminaison de chat en streaming avec SSE
 @app.post("/chat/stream")
 async def chat_with_stella_stream(request: ChatRequest):
     """
-    Chat with Stella financial assistant - streaming response with SSE
+    Chat avec l'assistant financier Stella - réponse en streaming avec SSE
     """
     async def generate_sse_stream():
         try:
@@ -215,32 +215,12 @@ async def list_langsmith_sessions():
             
             # Récupérer les dernières exécutions
             project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
-            logger.info(f"🔍 [LANGSMITH SESSIONS] Using project: {project_name}")
+            logger.info(f"Retrieving LangSmith sessions from project: {project_name}")
             
             recent_runs = list(client.list_runs(
                 project_name=project_name,
                 limit=20
             ))
-            
-            # Debug: Check what attributes are available on Run objects
-            logger.info(f"🔍 [LANGSMITH SESSIONS] Debugging Run object attributes...")
-            if recent_runs:
-                sample_run = recent_runs[0]
-                logger.info(f"   Sample run attributes: {[attr for attr in dir(sample_run) if not attr.startswith('_')]}")
-                
-                # Try different ways to get thread_id
-                thread_id_candidates = []
-                for attr in ['thread_id', 'session_id', 'trace_id']:
-                    if hasattr(sample_run, attr):
-                        value = getattr(sample_run, attr)
-                        thread_id_candidates.append(f"{attr}: {value}")
-                        logger.info(f"   Found {attr}: {value}")
-                
-                # Check extra field
-                if hasattr(sample_run, 'extra') and sample_run.extra:
-                    logger.info(f"   Extra fields: {sample_run.extra}")
-                    if 'thread_id' in sample_run.extra:
-                        logger.info(f"   Thread ID in extra: {sample_run.extra['thread_id']}")
             
             # Extraire les thread_ids uniques avec plus de détails
             thread_data = []
@@ -277,7 +257,7 @@ async def list_langsmith_sessions():
             
             thread_ids = list(threads_by_id.keys())
             
-            logger.info(f"✅ [LANGSMITH SESSIONS] Found {len(recent_runs)} runs, {len(thread_ids)} unique threads")
+            logger.info(f"Found {len(recent_runs)} runs, {len(thread_ids)} unique threads")
             
             return {
                 "available_sessions": thread_ids[:10],  # Limiter à 10
@@ -295,8 +275,7 @@ async def list_langsmith_sessions():
             os.chdir(current_dir)
             
     except Exception as e:
-        logger.error(f"❌ [LANGSMITH SESSIONS] Error listing sessions: {type(e).__name__}: {str(e)}")
-        logger.error(f"📋 [LANGSMITH SESSIONS] Full traceback:", exc_info=True)
+        logger.error(f"Error listing LangSmith sessions: {type(e).__name__}: {str(e)}", exc_info=True)
         return {
             "available_sessions": [],
             "error": str(e),
@@ -325,7 +304,7 @@ async def search_langsmith_sessions(partial_id: str):
             client = Client()
             project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
             
-            logger.info(f"🔍 [LANGSMITH SEARCH] Searching for sessions matching: {partial_id}")
+            logger.info(f"Searching LangSmith sessions for: {partial_id}")
             
             # Get more recent runs for better search
             recent_runs = list(client.list_runs(
@@ -348,7 +327,7 @@ async def search_langsmith_sessions(partial_id: str):
                         "match_type": "exact" if partial_id == thread_id else "partial"
                     })
             
-            logger.info(f"✅ [LANGSMITH SEARCH] Found {len(matching_sessions)} matching sessions")
+            logger.info(f"Found {len(matching_sessions)} matching sessions")
             
             return {
                 "search_term": partial_id,
@@ -361,7 +340,7 @@ async def search_langsmith_sessions(partial_id: str):
             os.chdir(current_dir)
             
     except Exception as e:
-        logger.error(f"❌ [LANGSMITH SEARCH] Error searching sessions: {str(e)}")
+        logger.error(f"Error searching LangSmith sessions: {str(e)}")
         return {
             "search_term": partial_id,
             "matching_sessions": [],
@@ -412,16 +391,11 @@ async def get_langsmith_trace(session_id: str):
     Get LangSmith trace data for graph visualization
     """
     try:
-        logger.info(f"🔍 [LANGSMITH API] Starting trace retrieval for session: {session_id}")
-        logger.info(f"🔧 [LANGSMITH API] LangSmith configuration:")
-        logger.info(f"   - Project: {os.environ.get('LANGCHAIN_PROJECT', 'stella')}")
-        logger.info(f"   - Tracing enabled: {os.environ.get('LANGCHAIN_TRACING_V2', 'false')}")
-        logger.info(f"   - API key set: {'Yes' if os.environ.get('LANGSMITH_API_KEY') else 'No'}")
+        logger.info(f"Retrieving LangSmith trace for session: {session_id}")
         
         # Change to agent directory for execution
         current_dir = os.getcwd()
         agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent')
-        logger.info(f"🔧 [LANGSMITH API] Changing to agent directory: {agent_dir}")
         os.chdir(agent_dir)
         
         try:
@@ -429,34 +403,21 @@ async def get_langsmith_trace(session_id: str):
             import asyncio
             
             async def get_trace_with_timeout():
-                logger.info(f"⏱️  [LANGSMITH API] Starting trace data retrieval with timeout...")
                 loop = asyncio.get_event_loop()
                 return await loop.run_in_executor(None, get_langsmith_trace_data, session_id)
             
-            # Timeout après 15 secondes (increased for debugging)
-            logger.info(f"⏱️  [LANGSMITH API] Setting 15-second timeout for trace retrieval...")
+            # Timeout après 15 secondes
             trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=15.0)
             
             if not trace_data:
-                logger.warning(f"❌ [LANGSMITH API] No trace data returned for session {session_id}")
-                logger.warning(f"🔍 [LANGSMITH API] This could indicate:")
-                logger.warning(f"   1. Session not found in LangSmith")
-                logger.warning(f"   2. LangSmith tracing not enabled")
-                logger.warning(f"   3. API key or project configuration issues")
-                logger.warning(f"   4. Network connectivity problems")
+                logger.warning(f"No trace data found for session {session_id}")
                 
                 raise HTTPException(
                     status_code=404,
                     detail=f"No LangSmith trace data found for session {session_id}. Check the backend logs for detailed debugging information. Make sure you've had a recent conversation with Stella and that LangSmith tracing is properly configured."
                 )
             
-            logger.info(f"✅ [LANGSMITH API] Trace data retrieved successfully")
-            logger.info(f"📊 [LANGSMITH API] Data summary:")
-            logger.info(f"   - Thread ID: {trace_data['thread_id']}")
-            logger.info(f"   - Tool calls: {len(trace_data['tool_calls'])}")
-            logger.info(f"   - Execution path: {trace_data['execution_path']}")
-            logger.info(f"   - Status: {trace_data['status']}")
-            logger.info(f"   - Total execution time: {trace_data['total_execution_time']:.2f}ms")
+            logger.info(f"Trace data retrieved for session {session_id}: {len(trace_data['tool_calls'])} tool calls, status: {trace_data['status']}")
             
             response = LangSmithTraceResponse(
                 thread_id=trace_data['thread_id'],
@@ -468,37 +429,27 @@ async def get_langsmith_trace(session_id: str):
                 timestamp=datetime.now().isoformat()
             )
             
-            logger.info(f"✅ [LANGSMITH API] Successfully built response for session {session_id}")
             return response
             
         except asyncio.TimeoutError:
-            logger.error(f"⏱️  [LANGSMITH API] TIMEOUT: Trace retrieval exceeded 15 seconds for session {session_id}")
-            logger.error(f"🔍 [LANGSMITH API] This suggests:")
-            logger.error(f"   1. LangSmith API is slow or unresponsive")
-            logger.error(f"   2. Network connectivity issues")
-            logger.error(f"   3. Large amount of trace data to process")
+            logger.error(f"Timeout retrieving LangSmith trace for session {session_id}")
             
             raise HTTPException(
                 status_code=408,
                 detail=f"Timeout while fetching LangSmith trace data for session {session_id}. The LangSmith API took too long to respond. Check your network connection and try again."
             )
         except Exception as inner_error:
-            logger.error(f"❌ [LANGSMITH API] Inner exception during trace retrieval: {type(inner_error).__name__}: {inner_error}")
-            logger.error(f"📋 [LANGSMITH API] Full traceback:", exc_info=True)
+            logger.error(f"Error during trace retrieval: {type(inner_error).__name__}: {inner_error}", exc_info=True)
             raise inner_error
         finally:
             # Always change back to original directory
-            logger.info(f"🔧 [LANGSMITH API] Changing back to original directory: {current_dir}")
             os.chdir(current_dir)
             
     except HTTPException:
         # Re-raise HTTP exceptions (they already have proper error messages)
         raise
     except Exception as e:
-        logger.error(f"❌ [LANGSMITH API] Unexpected error fetching trace data for session {session_id}")
-        logger.error(f"   Error type: {type(e).__name__}")
-        logger.error(f"   Error message: {str(e)}")
-        logger.error(f"📋 [LANGSMITH API] Full traceback:", exc_info=True)
+        logger.error(f"Error fetching LangSmith trace for session {session_id}: {type(e).__name__}: {str(e)}", exc_info=True)
         
         # Provide a detailed error message to the frontend
         error_detail = f"Failed to fetch LangSmith trace data: {type(e).__name__}: {str(e)}. Check the backend logs for detailed debugging information."
@@ -673,10 +624,6 @@ async def analyze_shap(request: Dict[str, Any]):
     Perform SHAP analysis on model predictions for explainability
     """
     try:
-        logger.info(f"SHAP Analysis Raw Request received:")
-        logger.info(f"  - Request keys: {list(request.keys())}")
-        logger.info(f"  - Request content: {request}")
-        
         # Extract data from request
         model_results = request.get('model_results')
         error_indices = request.get('error_indices', [])
@@ -687,8 +634,6 @@ async def analyze_shap(request: Dict[str, Any]):
         if not error_indices:
             raise HTTPException(status_code=400, detail="Error indices required for SHAP analysis")
         
-        logger.info(f"  - Error indices count: {len(error_indices)}")
-        logger.info(f"  - Model results keys: {list(model_results.keys()) if model_results else 'None'}")
         logger.info(f"Performing SHAP analysis for {len(error_indices)} error cases")
         
         # Validate error indices
@@ -984,7 +929,7 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
         # Track the agent workflow in real time
         async for event in stella_agent.astream(inputs, config=config, stream_mode="updates"):
             for node_name, node_output in event.items():
-                print(f"[STREAMING] Node: {node_name}, Output keys: {list(node_output.keys()) if isinstance(node_output, dict) else 'not a dict'}")
+                logger.debug(f"Processing node: {node_name}")
                 
                 # Provide status updates for different workflow steps
                 if node_name == "agent" and current_step != "agent":
@@ -1011,18 +956,16 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
                 # Check if this node has messages with AI response
                 if "messages" in node_output and node_output["messages"]:
                     for message in node_output["messages"]:
-                        print(f"[STREAMING] Message type: {type(message).__name__}, has content: {hasattr(message, 'content') and bool(message.content)}, has tool_calls: {hasattr(message, 'tool_calls') and bool(message.tool_calls)}")
                         
                         # IMPORTANT: Capture tool calls from agent node decisions
                         if node_name == "agent" and hasattr(message, 'tool_calls') and message.tool_calls:
-                            print(f"[STREAMING] Agent decided to call {len(message.tool_calls)} tool(s)")
+                            logger.debug(f"Agent calling {len(message.tool_calls)} tools")
                             
                             # Store pending tool calls
                             pending_tool_calls = message.tool_calls.copy()
                             
                             # Stream the reasoning content first if present
                             if hasattr(message, 'content') and message.content:
-                                print(f"[STREAMING] Streaming agent reasoning: {message.content[:100]}...")
                                 content = message.content
                                 words = content.split(' ')
                                 
@@ -1042,14 +985,11 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
                                     'tool_name': tool_name,
                                     'args': tool_args
                                 }
-                                print(f"[STREAMING] Streamed tool call: {tool_name} with args: {tool_args}")
                         
                         # Stream AI messages with content (including initial reasoning)
                         elif hasattr(message, 'content') and message.content and type(message).__name__ == 'AIMessage':
                             # Check if this message has tool calls (initial reasoning message) - fallback for non-agent nodes
                             if hasattr(message, 'tool_calls') and message.tool_calls and node_name != "agent":
-                                print(f"[STREAMING] Found AI message with tool calls from {node_name}: {message.content[:100]}...")
-                                
                                 # First, stream the reasoning content as INITIAL content
                                 content = message.content
                                 words = content.split(' ')
@@ -1069,12 +1009,9 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
                                         'tool_name': tool_name,
                                         'args': tool_call.get('args', {})
                                     }
-                                    print(f"[STREAMING] Tool call: {tool_name}")
                             
                             # Handle final AI messages without tool calls
                             elif not hasattr(message, 'tool_calls') or not message.tool_calls:
-                                print(f"[STREAMING] Found final AI response: {message.content[:100]}...")
-                                
                                 # Don't stream again if this is the same final message
                                 if not final_message or final_message.content != message.content:
                                     content = message.content
@@ -1093,8 +1030,6 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
                         elif (hasattr(message, 'content') and message.content and 
                               not hasattr(message, 'tool_calls') and 
                               node_name in ["generate_final_response", "prepare_chart_display", "prepare_data_display", "prepare_news_display", "prepare_profile_display"]):
-                            print(f"[STREAMING] Found final response from {node_name}: {message.content[:100]}...")
-                            
                             # Stream this response if it's different from what we already streamed
                             if not final_message or final_message.content != message.content:
                                 content = message.content
@@ -1111,7 +1046,6 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
         
         # If we didn't get a streamed final message, get the final state (without re-streaming content)
         if not final_message:
-            print("[STREAMING] No streamed final message found, getting final state...")
             # Get the final state to extract the final message for attachments only
             final_state = None
             async for event in stella_agent.astream(inputs, config=config, stream_mode="values"):
@@ -1121,7 +1055,6 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
                 # Get the last AI message for attachments only (don't re-stream content)
                 for msg in reversed(final_state["messages"]):
                     if hasattr(msg, 'content') and msg.content and type(msg).__name__ == 'AIMessage':
-                        print(f"[STREAMING] Found final message in state for attachments: {msg.content[:100]}...")
                         final_message = msg
                         # Don't re-stream the content since it was already processed
                         break
@@ -1141,36 +1074,34 @@ async def _run_stella_agent_stream(inputs: Dict[str, Any], config: Dict[str, Any
             if hasattr(final_message, 'plotly_json') and final_message.plotly_json:
                 final_data['has_chart'] = True
                 final_data['chart_data'] = final_message.plotly_json
-                print("📊 [API] Graphique Plotly détecté et ajouté à la réponse")
+                logger.debug("Chart data attached to response")
                 
             if hasattr(final_message, 'dataframe_json') and final_message.dataframe_json:
                 final_data['has_dataframe'] = True
                 final_data['dataframe_data'] = final_message.dataframe_json
-                print("📋 [API] DataFrame détecté et ajouté à la réponse")
+                logger.debug("DataFrame attached to response")
                 
             if hasattr(final_message, 'news_json') and final_message.news_json:
                 final_data['has_news'] = True
                 final_data['news_data'] = final_message.news_json
-                print("📰 [API] Actualités détectées et ajoutées à la réponse")
+                logger.debug("News data attached to response")
                 
             if hasattr(final_message, 'profile_json') and final_message.profile_json:
                 final_data['has_profile'] = True
                 final_data['profile_data'] = final_message.profile_json
-                print("🏢 [API] Profil d'entreprise détecté et ajouté à la réponse")
+                logger.debug("Company profile attached to response")
                 
             if hasattr(final_message, 'explanation_text') and final_message.explanation_text:
                 final_data['explanation_text'] = final_message.explanation_text
-                print("📝 [API] Texte explicatif détecté et ajouté à la réponse")
+                logger.debug("Explanation text attached to response")
             
             yield final_data
         else:
-            print("[STREAMING] Warning: No final message found to stream")
+            logger.warning("No final message found in agent stream")
             yield {
                 'type': 'error',
                 'content': 'Aucune réponse générée par l\'agent'
             }
-        
-        print("📋 [API] Exécution native de l'agent Stella avec streaming terminée")
             
     finally:
         # Always change back to original directory

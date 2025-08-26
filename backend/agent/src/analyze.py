@@ -4,6 +4,10 @@ import pandas as pd
 import joblib
 import os
 import numpy as np # Assurez-vous que numpy est importé
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Le chemin vers votre modèle
 # Chemin relatif au répertoire backend, peu importe d'où on exécute
@@ -19,12 +23,12 @@ def analyse_risks(processed_data: pd.DataFrame) -> str:
         - "Risque Élevé Détecté": Si la prédiction est '0' avec une confiance > 0.7.
         - "Aucun Risque Extrême Détecté": Dans tous les autres cas.
     """
-    print("Chargement du modèle de prédiction...")
+    logger.info("Loading prediction model...")
     if not os.path.exists(MODEL_PATH):
         raise FileNotFoundError(f"Modèle non trouvé à l'emplacement : {MODEL_PATH}")
     model = joblib.load(MODEL_PATH)
     
-    print("Préparation des données pour la prédiction...")
+    logger.info("Preparing data for prediction...")
 
     expected_cols = ['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield', 'calendarYear']
     
@@ -35,7 +39,7 @@ def analyse_risks(processed_data: pd.DataFrame) -> str:
     if data_for_prediction.empty or data_for_prediction.isnull().values.any():
         raise ValueError("Les données fournies sont vides ou contiennent des valeurs nulles après le reformatage.")
     
-    print("Exécution de la prédiction...")
+    logger.info("Executing prediction...")
     # On prédit sur la dernière ligne disponible (la plus récente)
     latest_data_point = data_for_prediction.tail(1)
 
@@ -47,15 +51,15 @@ def analyse_risks(processed_data: pd.DataFrame) -> str:
     # Notre règle métier spécifique
     confidence_in_class_0 = probabilities[0]
     
-    print(f"Classe prédite: {prediction_class}, Probabilités: [Classe 0: {probabilities[0]:.2f}, Classe 1: {probabilities[1]:.2f}]")
+    logger.info(f"Predicted class: {prediction_class}, Probabilities: [Class 0: {probabilities[0]:.2f}, Class 1: {probabilities[1]:.2f}]")
 
     # Appliquer la logique de décision
     if prediction_class == 0 and confidence_in_class_0 > 0.7:
         result = "Risque Élevé Détecté"
-        print(f"VERDICT: {result} (Confiance dans la classe 0 > 70%)")
+        logger.info(f"VERDICT: {result} (Confidence in class 0 > 70%)")
     else:
         result = "Aucun Risque Extrême Détecté"
-        print(f"VERDICT: {result} (La condition de risque élevé n'est pas remplie)")
+        logger.info(f"VERDICT: {result} (High risk condition not met)")
         
     return result
 
@@ -70,6 +74,6 @@ if __name__ == '__main__':
         cost_raw = fetch_fundamental_data("COST") # Utilisez un ticker qui fonctionne
         cost_processed = preprocess_financial_data(cost_raw)
         cost_prediction = predict_outperformance(cost_processed)
-        print(f"\nPrédiction pour COST: {cost_prediction}")
+        logger.info(f"Prediction for COST: {cost_prediction}")
     except Exception as e:
-        print(f"Erreur lors de la prédiction pour COST: {e}")
+        logger.error(f"Error during prediction for COST: {e}")

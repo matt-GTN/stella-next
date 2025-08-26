@@ -1,10 +1,10 @@
-# agent.py
+# agent.py - Agent principal de Stella pour l'analyse financière
 from dotenv import load_dotenv
 import os
 
-# Load .env from backend directory regardless of execution context
-# This ensures consistent environment loading whether called directly or via API
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Get backend directory
+# Charger le fichier .env depuis le répertoire backend indépendamment du contexte d'exécution
+# Cela garantit un chargement d'environnement cohérent qu'il soit appelé directement ou via l'API
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Obtenir le répertoire backend
 env_path = os.path.join(backend_dir, '.env')
 load_dotenv(env_path)
 
@@ -43,10 +43,10 @@ from langsmith import Client
 import httpx
 from datetime import timedelta
 
-# Note: Proxy configuration removed as we're now using OpenRouter directly
+# Note: Configuration proxy supprimée car nous utilisons maintenant OpenRouter directement
 
 
-# --- Import des tools ---
+# --- Import des outils ---
 from tools import (
     available_tools,
     _fetch_recent_news_logic,
@@ -59,10 +59,10 @@ from tools import (
     _fetch_price_history_logic,
     _compare_fundamental_metrics_logic,
     _compare_price_histories_logic
-    # _query_research_document_logic imported lazily in execute_tool_node
+    # _query_research_document_logic importé de manière paresseuse dans execute_tool_node
 )
 
-# Environment variables and constants
+# Variables d'environnement et constantes
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = "google/gemini-2.5-flash-lite"  # GLM-4.5-Air model via OpenRouter
 LANGSMITH_TRACING = True
@@ -73,8 +73,8 @@ LANGSMITH_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "stella")
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
-# Configure httpx client avec des timeouts robustes pour éviter les blocages
-# Problème résolu : après inactivité, les connexions TCP vers OpenRouter deviennent stale
+# Configurer le client httpx avec des timeouts robustes pour éviter les blocages
+# Problème résolu : après inactivité, les connexions TCP vers OpenRouter deviennent obsolètes
 httpx_client = httpx.Client(
     timeout=httpx.Timeout(
         connect=10.0,    # Timeout pour établir la connexion
@@ -93,7 +93,7 @@ httpx_client = httpx.Client(
     }
 )
 
-# Initialize the LLM with OpenRouter avec client httpx configuré
+# Initialiser le LLM avec OpenRouter et le client httpx configuré
 llm = ChatOpenAI(
     model=OPENROUTER_MODEL,
     api_key=OPENROUTER_API_KEY,

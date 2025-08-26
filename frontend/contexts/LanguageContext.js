@@ -42,7 +42,7 @@ export const LanguageProvider = ({ children }) => {
     }
 
     setLanguageState(newLanguage);
-    
+
     try {
       localStorage.setItem('portfolio-language', newLanguage);
       document.documentElement.lang = newLanguage;
@@ -56,7 +56,7 @@ export const LanguageProvider = ({ children }) => {
     try {
       const keys = key.split('.');
       let value = translations[language];
-      
+
       for (const k of keys) {
         if (value && typeof value === 'object' && k in value) {
           value = value[k];
@@ -74,7 +74,7 @@ export const LanguageProvider = ({ children }) => {
           break;
         }
       }
-      
+
       return value;
     } catch (error) {
       console.warn(`Translation error for key "${key}":`, error);

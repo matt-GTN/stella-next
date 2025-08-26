@@ -435,16 +435,10 @@ export function transformWorkflowDataSync(toolCalls = [], currentStep = -1, lang
   
   // Check cache first (only if caching is enabled)
   if (!disableCache && transformationCache.has(cacheKey)) {
-    console.log('💾 [WorkflowTransform] Using cached data for message:', messageData?.id);
     return transformationCache.get(cacheKey);
-  }
-  
-  if (disableCache) {
-    console.log('🚫 [WorkflowTransform] Cache désactivé pour message:', messageData?.id);
   }
 
   try {
-    console.log('🔄 [WorkflowTransform] Generating new visualization for message:', messageData?.id);
     
     const { nodes, executedTools } = transformToolCallsToNodes(toolCalls, currentStep);
     const edges = generateWorkflowEdges(nodes, toolCalls, currentStep);

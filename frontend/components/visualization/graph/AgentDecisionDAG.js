@@ -11,19 +11,29 @@ import {
   validateConsolidation
 } from './edgeConsolidationUtils';
 import {
-  debugExtractUserQuery,
-  debugExtractToolSummary,
-  debugExtractNodeContent,
-  debugSafeExtraction,
-  simpleCreateContent,
-  simpleTruncateText
-} from './contentExtractor.debug';
+  extractUserQuery,
+  extractToolSummary,
+  extractNodeContent,
+  safeContentExtraction,
+  createTruncatedContent,
+  truncateText
+} from './contentExtractor';
+
+// Fonction d'aide pour convertir de l'ancien format simpleCreateContent vers le nouveau format
+function simpleCreateContent(primary, secondary = null, detail = null) {
+  return createTruncatedContent({
+    primary: primary || 'Inconnu',
+    secondary: secondary,
+    detail: detail,
+    source: 'converted'
+  });
+}
 
 function useToolUniverse(toolCalls, allTools) {
   return React.useMemo(() => {
     const names = new Set();
 
-    // Normalize allTools into names
+    // Normaliser allTools en noms
     if (allTools) {
       if (Array.isArray(allTools)) {
         for (const t of allTools) {
@@ -34,7 +44,7 @@ function useToolUniverse(toolCalls, allTools) {
           }
         }
       } else if (typeof allTools === 'object') {
-        // object map: { toolName: config }
+        // carte d'objets: { toolName: config }
         Object.keys(allTools).forEach(k => names.add(k));
       }
     }
@@ -270,7 +280,7 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
   const shouldForceSingleLine = isDetailNode && !hasSecondaryContent && !hasDetailContent;
 
   const primaryLines = shouldForceSingleLine ?
-    [simpleTruncateText(truncatedContent.primary, Math.floor(textWidth / (12 * 0.6)))] : // Force single line with truncation
+    [truncateText(truncatedContent.primary, Math.floor(textWidth / (12 * 0.6)))] : // Force single line with truncation
     wrapText(truncatedContent.primary, textWidth, isDetailNode ? 11 : 12);
 
   const secondaryLines = hasSecondaryContent ?
@@ -592,16 +602,16 @@ export default function AgentDecisionDAG({
       return graphData.nodes
         // Include all nodes, including detail nodes to show actual user queries and tool details
         .map(node => {
-          // Extract actual content for this node using debug version with full graph context
-          const nodeContent = debugSafeExtraction(
-            () => debugExtractNodeContent(node, graphData),
-            simpleCreateContent(
-              (node.label && typeof node.label === 'object')
+          // Extract actual content for this node using full graph context
+          const nodeContent = safeContentExtraction(
+            () => extractNodeContent(node, toolCalls, null, sessionId),
+            createTruncatedContent({
+              primary: (node.label && typeof node.label === 'object')
                 ? (node.label[language] || node.label.en || node.label.fr || node.id)
                 : (node.label || node.id),
-              null,
-              null
-            )
+              secondary: null,
+              detail: null
+            })
           );
 
           return {
@@ -631,9 +641,9 @@ export default function AgentDecisionDAG({
         icon: '▶️'
       });
 
-      // Agent node with user query extraction using debug version
-      const agentContent = debugSafeExtraction(
-        () => debugExtractUserQuery(toolCalls),
+      // Agent node with user query extraction
+      const agentContent = safeContentExtraction(
+        () => extractUserQuery(toolCalls, sessionId),
         simpleCreateContent(
           language === 'fr' ? 'Agent' : 'Agent',
           language === 'fr' ? 'Analyse' : 'Analysis',
@@ -651,8 +661,8 @@ export default function AgentDecisionDAG({
       // Only add tool execution nodes if we have actual tool calls
       if (Array.isArray(toolCalls) && toolCalls.length > 0) {
         toolCalls.forEach((tc, i) => {
-          const toolContent = debugSafeExtraction(
-            () => debugExtractToolSummary([tc]),
+          const toolContent = safeContentExtraction(
+            () => extractToolSummary([tc]),
             simpleCreateContent(
               tc?.name || tc?.tool_name || 'Tool',
               language === 'fr' ? 'Exécution' : 'Execution',

@@ -55,7 +55,7 @@ function DataFrameTable({ dfJson }) {
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const columnMenuRef = useRef(null);
 
-  // Close column menu when clicking outside
+  // Fermer le menu de colonne en cliquant à l'extérieur
   useEffect(() => {
     function handleClickOutside(event) {
       if (columnMenuRef.current && !columnMenuRef.current.contains(event.target)) {
@@ -83,11 +83,11 @@ function DataFrameTable({ dfJson }) {
     }
   }, [dfJson]);
 
-  // Filter and sort data
+  // Filtrer et trier les données
   const processedData = useMemo(() => {
     let filtered = data;
 
-    // Apply search filter
+    // Appliquer le filtre de recherche
     if (searchTerm) {
       filtered = data.filter(row =>
         row.some(cell =>
@@ -96,7 +96,7 @@ function DataFrameTable({ dfJson }) {
       );
     }
 
-    // Apply sorting
+    // Appliquer le tri
     if (sortConfig.key !== null) {
       filtered = [...filtered].sort((a, b) => {
         const aVal = a[sortConfig.key];

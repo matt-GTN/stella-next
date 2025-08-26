@@ -10,10 +10,14 @@ import ShapExplainer from "@/components/modeling/ShapExplainer";
 import ConfidenceAnalyzer from "@/components/modeling/ConfidenceAnalyzer";
 import { Brain, Play, RefreshCw, TrendingUp, Target, TreePine, Layers, Users, Settings, ChevronDown } from "lucide-react";
 
+/**
+ * Composant principal de la page de modélisation avancée
+ * Permet l'entraînement et l'analyse de modèles de machine learning pour l'analyse financière
+ */
 function ModelingPageContent() {
   const { language } = useLanguage();
 
-  // Hyperparameters state
+  // État des hyperparamètres
   const [hyperparams, setHyperparams] = useState({
     n_estimators: 134,
     max_depth: 10,
@@ -22,17 +26,17 @@ function ModelingPageContent() {
     criterion: 'entropy'
   });
 
-  // Model state
+  // État du modèle
   const [isTraining, setIsTraining] = useState(false);
   const [isModelTrained, setIsModelTrained] = useState(false);
   const [modelResults, setModelResults] = useState(null);
   const [error, setError] = useState(null);
   const [showResults, setShowResults] = useState(false);
   
-  // Confidence analysis state - shared between ConfidenceAnalyzer and ShapExplainer
+  // État de l'analyse de confiance - partagé entre ConfidenceAnalyzer et ShapExplainer
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
 
-  // Optimal parameters
+  // Paramètres optimaux
   const OPTIMAL_PARAMS = {
     n_estimators: 134,
     max_depth: 10,

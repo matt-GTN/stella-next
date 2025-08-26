@@ -1,30 +1,30 @@
-# Use the official Node.js runtime as the base image
+# Utiliser l'image officielle Node.js comme image de base
 FROM node:18-alpine AS base
 
-# Install dependencies only when needed
+# Installer les dépendances seulement quand nécessaire
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+# Voir https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine pour comprendre pourquoi libc6-compat pourrait être nécessaire.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
+# Installer les dépendances basées sur le gestionnaire de paquets préféré
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Rebuild the source code only when needed
+# Reconstruire le code source seulement quand nécessaire
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
+# Définir les variables d'environnement pour le build de production
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Construire l'application avec sortie standalone
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Image de production, copier tous les fichiers et exécuter next
 FROM base AS runner
 WORKDIR /app
 
@@ -36,11 +36,11 @@ RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 
-# Set the correct permission for prerender cache
+# Définir les permissions correctes pour le cache de pré-rendu
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
-# Automatically leverage output traces to reduce image size
+# Utiliser automatiquement les traces de sortie pour réduire la taille de l'image
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -52,6 +52,6 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# server.js is created by next build from the standalone output
+# server.js est créé par next build à partir de la sortie standalone
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]

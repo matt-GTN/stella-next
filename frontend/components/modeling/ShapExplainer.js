@@ -4,6 +4,12 @@ import { useState, useEffect } from "react";
 import PlotlyChart from "./PlotlyChart";
 import { Brain, AlertTriangle, TrendingDown, Lightbulb, ChevronDown, RefreshCw, CheckCircle, Building2, Gauge, TrendingUp } from "lucide-react";
 
+/**
+ * Composant d'explication SHAP pour analyser les erreurs de prédiction du modèle
+ * @param {Object} modelResults - Résultats du modèle avec prédictions et probabilités
+ * @param {string} language - Langue d'affichage
+ * @param {number} confidenceThreshold - Seuil de confiance pour filtrer les erreurs
+ */
 export default function ShapExplainer({ modelResults, language, confidenceThreshold = 0.7 }) {
   const [selectedErrorCase, setSelectedErrorCase] = useState(null);
   const [shapAnalysis, setShapAnalysis] = useState(null);
@@ -11,24 +17,17 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
   const [shapError, setShapError] = useState(null);
   const [errorCases, setErrorCases] = useState([]);
 
-  // Find high-confidence error cases when modelResults or confidenceThreshold change
+  // Trouver les cas d'erreur à haute confiance quand modelResults ou confidenceThreshold changent
   useEffect(() => {
-    // Debug: Check what's in modelResults
-    console.log('ModelResults keys:', Object.keys(modelResults || {}));
-    console.log('Has error_cases_by_threshold:', !!modelResults?.error_cases_by_threshold);
-    console.log('Has predictions/probabilities:', !!modelResults?.predictions, !!modelResults?.probabilities);
-
     let errors = [];
 
     if (modelResults?.error_cases_by_threshold) {
-      // Use pre-computed error cases from backend
+      // Utiliser les cas d'erreur pré-calculés du backend
       const availableThresholds = Object.keys(modelResults.error_cases_by_threshold)
         .map(t => parseFloat(t))
         .sort((a, b) => a - b);
 
-      console.log('Available thresholds:', availableThresholds);
-
-      // Find the threshold that's closest to but not greater than the current threshold
+      // Trouver le seuil le plus proche mais pas supérieur au seuil actuel
       let selectedThreshold = availableThresholds[0];
       for (const threshold of availableThresholds) {
         if (threshold <= confidenceThreshold) {
@@ -39,21 +38,9 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
       }
 
       errors = modelResults.error_cases_by_threshold[selectedThreshold.toString()] || [];
-
-      console.log(`Using pre-computed error cases for threshold ${selectedThreshold} (requested: ${confidenceThreshold})`);
-      console.log(`Found ${errors.length} error cases`);
-      if (errors.length > 0) {
-        console.log('First 3 error cases:');
-        errors.slice(0, 3).forEach((error, idx) => {
-          console.log(`  Case ${idx + 1}: ${error.company_info} - Prediction: ${error.predicted_label}, Actual: ${error.true_label}, Confidence: ${error.confidence.toFixed(3)}`);
-        });
-      }
-
       setErrorCases(errors);
     } else if (modelResults?.predictions && modelResults?.probabilities && modelResults?.test_indices) {
-      // Fallback to old calculation method if new structure not available
-      console.log('Using fallback calculation method');
-
+      // Retour à l'ancienne méthode de calcul si la nouvelle structure n'est pas disponible
       for (let i = 0; i < modelResults.predictions.length; i++) {
         const prediction = modelResults.predictions[i];
         const probabilities = modelResults.probabilities[i];
@@ -72,10 +59,8 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
         }
       }
 
-      console.log(`Fallback: Found ${errors.length} error cases`);
       setErrorCases(errors.slice(0, 20));
     } else {
-      console.log('No valid data structure found');
       setErrorCases([]);
     }
 
@@ -100,25 +85,16 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
 
     // Check if we already have pre-computed SHAP analysis
     if (errorCase.shap_analysis) {
-      console.log('Using pre-computed SHAP analysis for', errorCase.company_info);
       setShapAnalysis(errorCase.shap_analysis);
       return;
     }
 
-    console.log('No pre-computed SHAP analysis, making API call for', errorCase.company_info);
     setIsLoadingShap(true);
     setShapError(null);
 
     try {
       // Get all error indices for batch analysis
       const allErrorIndices = errorCases.map(ec => ec.index); // Already integers, no need to parse
-
-      console.log('SHAP Analysis Request:', {
-        action: 'shap-analysis',
-        error_indices: allErrorIndices,
-        model_results_keys: Object.keys(modelResults || {}),
-        has_hyperparameters: !!(modelResults?.hyperparameters)
-      });
 
       const response = await fetch('/api/modeling', {
         method: 'POST',
@@ -159,7 +135,6 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
           // If specific case not found, use the first available case as fallback
           const firstCase = result.data.error_cases?.[0];
           if (firstCase) {
-            console.log('Using first available SHAP case as fallback');
             setShapAnalysis({
               shap_values: firstCase.shap_values,
               base_value: firstCase.base_value,
@@ -203,20 +178,12 @@ export default function ShapExplainer({ modelResults, language, confidenceThresh
   };
 
   const handleErrorCaseChange = (errorCase) => {
-    console.log('Selected error case:', errorCase);
-    console.log('Error case probabilities:', errorCase.probabilities);
-    console.log('Error case confidence:', errorCase.confidence);
-    console.log('Expected class 1 probability:', errorCase.probabilities ? errorCase.probabilities[1] : 'N/A');
-    console.log('Has pre-computed SHAP:', !!errorCase.shap_analysis);
-
     setSelectedErrorCase(errorCase);
 
     // Use pre-computed SHAP analysis if available
     if (errorCase.shap_analysis) {
-      console.log('Using pre-computed SHAP analysis');
       setShapAnalysis(errorCase.shap_analysis);
     } else {
-      console.log('No pre-computed SHAP analysis, clearing current analysis');
       setShapAnalysis(null);
     }
   };

@@ -5,10 +5,16 @@ import { Target, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
 import Slider from "./Slider";
 import PlotlyChart from "./PlotlyChart";
 
+/**
+ * Composant d'analyse de confiance pour évaluer les prédictions du modèle
+ * @param {Object} modelResults - Résultats du modèle avec prédictions et probabilités
+ * @param {string} language - Langue d'affichage ('en' ou 'fr')
+ * @param {Function} onConfidenceThresholdChange - Callback pour les changements de seuil
+ */
 export default function ConfidenceAnalyzer({ modelResults, language = 'en', onConfidenceThresholdChange }) {
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
   
-  // Handle threshold changes and notify parent
+  // Gérer les changements de seuil et notifier le parent
   const handleThresholdChange = (newThreshold) => {
     setConfidenceThreshold(newThreshold);
     if (onConfidenceThresholdChange) {
@@ -19,29 +25,23 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en', onCo
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState(null);
 
-  // Use pre-computed confidence analysis when threshold changes
+  // Utiliser l'analyse de confiance pré-calculée quand le seuil change
   useEffect(() => {
-    console.log('ConfidenceAnalyzer - ModelResults keys:', Object.keys(modelResults || {}));
-    console.log('Has confidence_analysis_by_threshold:', !!modelResults?.confidence_analysis_by_threshold);
-    
     if (!modelResults?.confidence_analysis_by_threshold) {
-      console.log('No pre-computed confidence analysis found, falling back to old method');
-      // Fallback to old calculation if new structure not available
+      // Retour au calcul ancien si la nouvelle structure n'est pas disponible
       if (!modelResults?.probabilities || !modelResults?.predictions) return;
-    } else {
-      console.log('Using pre-computed confidence analysis');
     }
 
     setIsAnalyzing(true);
     setAnalysisError(null);
     
-    // Simulate analysis delay for better UX
+    // Simuler un délai d'analyse pour une meilleure UX
     const timer = setTimeout(() => {
       try {
         let analysis;
         
         if (modelResults?.confidence_analysis_by_threshold) {
-          // Use pre-computed confidence analysis
+          // Utiliser l'analyse de confiance pré-calculée
           const availableThresholds = Object.keys(modelResults.confidence_analysis_by_threshold)
             .map(t => parseFloat(t))
             .sort((a, b) => a - b);
@@ -57,10 +57,8 @@ export default function ConfidenceAnalyzer({ modelResults, language = 'en', onCo
           }
           
           analysis = modelResults.confidence_analysis_by_threshold[selectedThreshold.toString()];
-          console.log(`Using pre-computed confidence analysis for threshold ${selectedThreshold} (requested: ${confidenceThreshold})`);
         } else {
           // Fallback to old calculation method
-          console.log('Using fallback confidence analysis calculation');
           analysis = calculateConfidenceAnalysis(
             modelResults.probabilities,
             modelResults.predictions,

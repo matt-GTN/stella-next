@@ -1,4 +1,4 @@
-# tools.py
+# tools.py - Définition des outils disponibles pour l'agent Stella
 
 import pandas as pd
 import plotly.express as px
@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 from io import StringIO
 from typing import List
 
-# --- Import des logiques de src  ---
+# --- Import des logiques depuis le module src ---
 from src.search_ticker import search_ticker as _search_ticker_logic
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
@@ -17,7 +17,7 @@ from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
 from src.fetch_price import fetch_price_history as _fetch_price_history_logic
 from src.compare_fundamentals import compare_fundamental_metrics as _compare_fundamental_metrics_logic
 from src.compare_prices import compare_price_histories as _compare_price_histories_logic
-# PDF research is imported lazily to avoid initialization delays
+# La recherche PDF est importée de manière paresseuse pour éviter les délais d'initialisation
 # from src.pdf_research import query_research_document as _query_research_document_logic
 from src.chart_theme import stella_theme
 
@@ -74,14 +74,14 @@ def _create_dynamic_chart_logic(
 ) -> str:
     """Contient la logique de création de graphique, sans être un outil LangChain."""
     try:
-        df = data.copy() # On travaille sur une copie
+        df = data.copy() # Travailler sur une copie pour éviter les modifications
         if 'calendarYear' in df.columns:
             df['calendarYear'] = df['calendarYear'].astype(str)
 
         common_args = {
             'title': title,
             'color': color_column,
-            'color_discrete_sequence': stella_theme['colors'] # Appliquer la palette
+            'color_discrete_sequence': stella_theme['colors'] # Appliquer la palette de couleurs Stella
         }
 
         if chart_type == 'line':
@@ -101,19 +101,19 @@ def _create_dynamic_chart_logic(
             xaxis=stella_theme['axis_config'],
             yaxis=stella_theme['axis_config'],
             legend=dict(
-                bordercolor="rgba(0, 0, 0, 0)",  # Pas de bordure
+                bordercolor="rgba(0, 0, 0, 0)",  # Pas de bordure pour la légende
                 borderwidth=0
             )
         )
         return pio.to_json(fig)
 
     except Exception as e:
-        # Il est utile de savoir quelle colonne a posé problème
+        # Utile pour diagnostiquer quelle colonne a causé le problème
         if isinstance(e, KeyError):
             return f"Erreur: La colonne '{e.args[0]}' est introuvable. Colonnes disponibles: {list(df.columns)}"
         return f"Erreur lors de la création du graphique : {str(e)}"
 
-# L'outil LangChain qui est "vu" par le LLM
+# L'outil LangChain visible par le LLM
 @tool
 def create_dynamic_chart(
     chart_type: str,
@@ -204,7 +204,7 @@ def query_research(query: str) -> str:
     """
     return "[La recherche dans le document est prête à être exécutée.]"
 
-# --- La liste complète des outils disponibles pour l'agent ---
+# --- Liste complète des outils disponibles pour l'agent Stella ---
 available_tools = [
     search_ticker,
     fetch_data,
