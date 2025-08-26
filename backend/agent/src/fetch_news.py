@@ -50,9 +50,11 @@ def fetch_recent_news(ticker: str, company_name: str, limit: int = 3) -> str:
         for article in articles:
             articles_to_return.append({
                 "title": article.get('title'),
-                "site": article.get('source', {}).get('name'), # La source est dans un sous-dictionnaire
+                "source": {"name": article.get('source', {}).get('name')}, # Structure compatible avec le frontend
                 "url": article.get('url'),
-                "image": article.get('urlToImage') # Le champ s'appelle urlToImage
+                "urlToImage": article.get('urlToImage'), # Utilise le même nom que le frontend
+                "publishedAt": article.get('publishedAt'), # Ajoute la date de publication
+                "description": article.get('description') # Ajoute la description
             })
         
         return json.dumps(articles_to_return)

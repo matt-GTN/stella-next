@@ -427,6 +427,10 @@ def execute_tool_node(state: AgentState):
                     company_name=company_name
                 )
 
+                # 5. On met à jour l'état avec les informations du ticker et de l'entreprise
+                current_state_updates["ticker"] = ticker
+                current_state_updates["company_name"] = company_name
+
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=news_summary))
                 
             elif tool_name == "preprocess_data":
