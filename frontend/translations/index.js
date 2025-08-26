@@ -56,7 +56,10 @@ export const translations = {
       processing: "Traitement...",
       complete: "Terminé",
       error: "Erreur",
-      retry: "Réessayer"
+      retry: "Réessayer",
+      called: "Outil appelé",
+      userQuery: "Requête Utilisateur",
+      executedTools: "Outils Exécutés"
     },
 
     // Data components
@@ -149,7 +152,10 @@ export const translations = {
       processing: "Processing...",
       complete: "Complete",
       error: "Error",
-      retry: "Retry"
+      retry: "Retry",
+      called: "Tool called",
+      userQuery: "User Query",
+      executedTools: "Executed Tools"
     },
 
     // Data components

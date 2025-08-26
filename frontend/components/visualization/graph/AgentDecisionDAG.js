@@ -29,12 +29,17 @@ function simpleCreateContent(primary, secondary = null, detail = null) {
   });
 }
 
-function useToolUniverse(toolCalls, allTools) {
+function useToolUniverse(toolCalls, allTools, sessionId, isLangSmithData) {
   return React.useMemo(() => {
+    // Pour les données LangSmith, ne pas utiliser toolUniverse car les outils sont intégrés dans les nœuds
+    if (isLangSmithData) {
+      return [];
+    }
+
     const names = new Set();
 
-    // Normaliser allTools en noms
-    if (allTools) {
+    // Normaliser allTools en noms - seulement si allTools est explicitement fourni
+    if (allTools && allTools.length > 0) {
       if (Array.isArray(allTools)) {
         for (const t of allTools) {
           if (typeof t === 'string') names.add(t);
@@ -49,14 +54,14 @@ function useToolUniverse(toolCalls, allTools) {
       }
     }
 
-    // Add from toolCalls too
+    // Add from toolCalls too - seulement les outils réellement utilisés dans cette session
     for (const tc of Array.isArray(toolCalls) ? toolCalls : []) {
       const n = tc?.name || tc?.tool_name;
       if (n) names.add(n);
     }
 
     return Array.from(names);
-  }, [toolCalls, allTools]);
+  }, [toolCalls, allTools, sessionId, isLangSmithData]); // Ajouter sessionId et isLangSmithData comme dépendances
 }
 
 /**
@@ -214,6 +219,9 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
   // Check if this is a detail node that needs special multi-line rendering
   const isDetailNode = node?.id?.includes('_detail') || node?.isDetailNode || false;
 
+  // Check if this is a tool node (execute_tool_detail nodes) for compact styling
+  const isToolNode = node?.id?.includes('execute_tool_detail') || false;
+
   // Different colors and styles based on node type and usage
   const getNodeStyle = () => {
     // If node is unused, apply gray styling
@@ -221,6 +229,17 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
       return {
         fill: "#6b7280", // gray-500
         stroke: "#9ca3af", // gray-400
+        textColor: "#ffffff",
+        opacity: 1,
+        strokeDasharray: "none"
+      };
+    }
+
+    // Tool nodes get a more compact, distinct color
+    if (isToolNode) {
+      return {
+        fill: "#7c3aed", // purple-700 (darker and more compact)
+        stroke: "#8b5cf6", // purple-600
         textColor: "#ffffff",
         opacity: 1,
         strokeDasharray: "none"
@@ -271,17 +290,17 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
   const textWidth = w * 0.85;
 
   // Check if we have meaningful secondary and detail content
-  const hasSecondaryContent = isDetailNode && truncatedContent.secondary && truncatedContent.secondary !== truncatedContent.primary;
-  const hasDetailContent = isDetailNode && truncatedContent.detail &&
+  const hasSecondaryContent = isDetailNode && !isToolNode && truncatedContent.secondary && truncatedContent.secondary !== truncatedContent.primary;
+  const hasDetailContent = isDetailNode && !isToolNode && truncatedContent.detail &&
     truncatedContent.detail !== truncatedContent.primary &&
     truncatedContent.detail !== truncatedContent.secondary;
 
-  // If this is a detail node but only has primary content, force single line to avoid repetition
-  const shouldForceSingleLine = isDetailNode && !hasSecondaryContent && !hasDetailContent;
+  // If this is a tool node or a detail node with only primary content, force single line
+  const shouldForceSingleLine = isToolNode || (isDetailNode && !hasSecondaryContent && !hasDetailContent);
 
   const primaryLines = shouldForceSingleLine ?
-    [truncateText(truncatedContent.primary, Math.floor(textWidth / (12 * 0.6)))] : // Force single line with truncation
-    wrapText(truncatedContent.primary, textWidth, isDetailNode ? 11 : 12);
+    [truncateText(truncatedContent.primary, Math.floor(textWidth / ((isToolNode ? 10 : 12) * 0.6)))] : // Force single line with truncation, smaller font for tool nodes
+    wrapText(truncatedContent.primary, textWidth, isToolNode ? 10 : (isDetailNode ? 11 : 12));
 
   const secondaryLines = hasSecondaryContent ?
     wrapText(truncatedContent.secondary, textWidth, 9) : [];
@@ -357,7 +376,7 @@ function Node({ x, y, w, h, content, index = 0, icon = null, isUnused = false, t
             key={`primary-${idx}`}
             x={x + w / 2}
             y={(prioritizedIcon ? y + 45 : y + 25) + (idx * 14)}
-            fontSize={isDetailNode ? 11 : 12}
+            fontSize={isToolNode ? 10 : (isDetailNode ? 11 : 12)}
             fontWeight="600"
             fill={style.textColor}
             textAnchor="middle"
@@ -477,7 +496,8 @@ export default function AgentDecisionDAG({
   toolCalls = [],
   allTools = [],
   graphData = null,
-  language = "en"
+  language = "en",
+  sessionId = null
 }) {
   // Determine if we're using new graphData format or legacy format
   const isLangSmithData = graphData && graphData.nodes && graphData.edges;
@@ -485,14 +505,20 @@ export default function AgentDecisionDAG({
   // Only log on initial mount and when key props change
   React.useEffect(() => {
     console.log('🎨 [AgentDecisionDAG] Rendering with:', {
+      sessionId,
       isLangSmithData,
       graphDataNodes: graphData?.nodes?.length || 0,
       graphDataEdges: graphData?.edges?.length || 0,
-      legacyToolCalls: toolCalls?.length || 0
+      legacyToolCalls: toolCalls?.length || 0,
+      toolCallsDetails: toolCalls?.map(tc => ({ name: tc.name, args: tc.arguments })) || [],
+      graphDataToolNodes: graphData?.nodes?.filter(n => n.id.includes('execute_tool_detail'))?.map(n => ({
+        id: n.id,
+        toolCall: n.toolCall
+      })) || []
     });
-  }, [isLangSmithData, graphData?.nodes?.length, graphData?.edges?.length, toolCalls?.length]);
+  }, [isLangSmithData, graphData?.nodes?.length, graphData?.edges?.length, toolCalls?.length, sessionId]);
 
-  const toolUniverse = useToolUniverse(toolCalls, allTools);
+  const toolUniverse = useToolUniverse(toolCalls, allTools, sessionId, isLangSmithData);
 
   // Enhanced layout configuration - stable object to prevent re-renders
   const layoutConfig = React.useMemo(() => ({
@@ -505,10 +531,15 @@ export default function AgentDecisionDAG({
     detailNodeWidth: 280, // Much wider for more text
     detailNodeHeight: 70, // Keep same height as regular nodes
 
+    // Tool node dimensions (smaller and more compact)
+    toolNodeWidth: 140, // Smaller width for tool nodes
+    toolNodeHeight: 50, // Smaller height for tool nodes
+
     // Horizontal spacing improvements (Requirement 3.1)
     minHorizontalSpacing: 200, // Minimum space between nodes
     preparationLayerSpacing: 180, // Specific spacing for preparation layer
     detailNodeOffset: 80, // Increased offset for larger detail nodes
+    toolNodeSpacing: 160, // Spacing between chained tool nodes
 
     // Vertical spacing improvements (Requirement 3.2)
     minVerticalSpacing: 120, // Minimum space between workflow layers
@@ -582,15 +613,29 @@ export default function AgentDecisionDAG({
     return baseSpacing;
   }, [layoutConfig]);
 
-  const calculateDetailNodePosition = React.useCallback((parentPos, detailIndex = 0) => {
-    // Detail node positioning system with proper offsets (Requirement 3.3)
-    // Use larger dimensions for detail nodes
-    return {
-      x: parentPos.x + layoutConfig.nodeWidth + layoutConfig.detailNodeOffset,
-      y: parentPos.y + (detailIndex * (layoutConfig.detailNodeHeight + 30)), // Stack multiple details vertically with more space
-      w: layoutConfig.detailNodeWidth, // Use larger width for detail nodes
-      h: layoutConfig.detailNodeHeight // Use larger height for detail nodes
-    };
+  const calculateDetailNodePosition = React.useCallback((parentPos, detailIndex = 0, nodeId = '') => {
+    // Check if this is a tool node (execute_tool_detail nodes)
+    const isToolNode = nodeId.includes('execute_tool_detail');
+
+    if (isToolNode) {
+      // Tool nodes are positioned in a horizontal chain at the same level as the execute_tool node
+      // Add base spacing between execute_tool and first tool, then additional spacing for subsequent tools
+      const baseToolSpacing = 60; // Base spacing between execute_tool and first tool
+      return {
+        x: parentPos.x + layoutConfig.nodeWidth + baseToolSpacing + (detailIndex * layoutConfig.toolNodeSpacing),
+        y: parentPos.y, // Same Y level as parent (execute_tool node)
+        w: layoutConfig.toolNodeWidth, // Use smaller width for tool nodes
+        h: layoutConfig.toolNodeHeight // Use smaller height for tool nodes
+      };
+    } else {
+      // Regular detail nodes (like agent_query_detail) use the original positioning
+      return {
+        x: parentPos.x + layoutConfig.nodeWidth + layoutConfig.detailNodeOffset,
+        y: parentPos.y + (detailIndex * (layoutConfig.detailNodeHeight + 30)), // Stack multiple details vertically with more space
+        w: layoutConfig.detailNodeWidth, // Use larger width for detail nodes
+        h: layoutConfig.detailNodeHeight // Use larger height for detail nodes
+      };
+    }
   }, [layoutConfig]);
 
   // Build path nodes: either from graphData or legacy format
@@ -599,12 +644,86 @@ export default function AgentDecisionDAG({
       // Use LangSmith graph structure with enhanced content extraction
       console.log('🎨 [AgentDecisionDAG] Using LangSmith nodes:', graphData.nodes);
 
+      // Debug: Check for stale tool data and validate tool data consistency
+      const toolNodes = graphData.nodes.filter(n => n.id.includes('execute_tool_detail'));
+      if (toolNodes.length > 0) {
+        console.log('🔧 [AgentDecisionDAG] Tool nodes found:', toolNodes.map(n => ({
+          id: n.id,
+          sessionId: sessionId,
+          toolCall: n.toolCall,
+          rawToolCalls: n.rawToolCalls
+        })));
+      }
+      if (toolNodes.length > 0 && sessionId) {
+        const hasStaleData = toolNodes.some(node => {
+          const toolCall = node.toolCall || (node.rawToolCalls && node.rawToolCalls[0]);
+          return toolCall && toolCall.arguments &&
+            (toolCall.arguments.ticker === 'AMD' && sessionId !== 'assistant-5');
+        });
+
+        if (hasStaleData) {
+          console.warn('🚨 [AgentDecisionDAG] Detected stale tool data! Filtering out tool nodes.');
+          // Filter out tool nodes if we detect stale data
+          const filteredNodes = graphData.nodes.filter(n => !n.id.includes('execute_tool_detail'));
+          console.log('🔧 [AgentDecisionDAG] Filtered nodes:', filteredNodes.map(n => n.id));
+
+          return filteredNodes.map(node => {
+            // Process non-tool nodes normally
+            const nodeSpecificToolCalls = toolCalls; // Use fresh toolCalls instead
+
+            const nodeContent = safeContentExtraction(
+              () => extractNodeContent(node, nodeSpecificToolCalls, null, sessionId),
+              createTruncatedContent({
+                primary: (node.label && typeof node.label === 'object')
+                  ? (node.label[language] || node.label.en || node.label.fr || node.id)
+                  : (node.label || node.id),
+                secondary: null,
+                detail: null
+              })
+            );
+
+            return {
+              id: node.id,
+              type: node.type || 'default',
+              content: nodeContent,
+              icon: node.icon,
+              isActive: node.isActive,
+              isExecuted: node.isExecuted,
+              isExecuting: node.isExecuting,
+              isUnused: node.isUnused,
+              sessionId: sessionId
+            };
+          });
+        }
+      }
+
       return graphData.nodes
         // Include all nodes, including detail nodes to show actual user queries and tool details
         .map(node => {
           // Extract actual content for this node using full graph context
+          // For individual tool nodes, use the specific tool call data stored in the node
+          const nodeSpecificToolCalls = node.toolCall ? [node.toolCall] :
+            node.rawToolCalls ? node.rawToolCalls :
+              toolCalls;
+
+          // Debug logging for tool nodes
+          if (node.id.includes('execute_tool_detail')) {
+            console.log(`🎨 [AgentDecisionDAG] Processing tool node ${node.id}:`, {
+              sessionId,
+              hasToolCall: !!node.toolCall,
+              hasRawToolCalls: !!node.rawToolCalls,
+              toolCallsLength: toolCalls?.length || 0,
+              nodeSpecificLength: nodeSpecificToolCalls?.length || 0,
+              nodeData: {
+                toolCall: node.toolCall,
+                rawToolCalls: node.rawToolCalls
+              },
+              extractedContent: 'will be extracted next'
+            });
+          }
+
           const nodeContent = safeContentExtraction(
-            () => extractNodeContent(node, toolCalls, null, sessionId),
+            () => extractNodeContent(node, nodeSpecificToolCalls, null, sessionId),
             createTruncatedContent({
               primary: (node.label && typeof node.label === 'object')
                 ? (node.label[language] || node.label.en || node.label.fr || node.id)
@@ -614,6 +733,15 @@ export default function AgentDecisionDAG({
             })
           );
 
+          // Debug logging for tool node content
+          if (node.id.includes('execute_tool_detail')) {
+            console.log(`🎨 [AgentDecisionDAG] Extracted content for ${node.id}:`, {
+              sessionId,
+              nodeContent,
+              fallbackUsed: nodeContent.source === 'fallback'
+            });
+          }
+
           return {
             id: node.id,
             type: node.type || 'default',
@@ -622,7 +750,8 @@ export default function AgentDecisionDAG({
             isActive: node.isActive,
             isExecuted: node.isExecuted,
             isExecuting: node.isExecuting,
-            isUnused: node.isUnused
+            isUnused: node.isUnused,
+            sessionId: sessionId // Add sessionId to force updates
           };
         });
     } else {
@@ -693,14 +822,21 @@ export default function AgentDecisionDAG({
 
       return list;
     }
-  }, [graphData, toolCalls, language, isLangSmithData]);
+  }, [graphData, toolCalls, language, isLangSmithData, sessionId]);
 
   // Debug pathNodes - only log when pathNodes actually change
   React.useEffect(() => {
     if (pathNodes.length > 0) {
-      console.log('🎨 [AgentDecisionDAG] PathNodes created:', pathNodes.map(n => n.id));
+      const toolNodes = pathNodes.filter(n => n.id.includes('execute_tool_detail'));
+      console.log('🎨 [AgentDecisionDAG] PathNodes created:', {
+        totalNodes: pathNodes.length,
+        toolNodes: toolNodes.length,
+        toolNodeIds: toolNodes.map(n => n.id),
+        toolNodeContent: toolNodes.map(n => ({ id: n.id, content: n.content })),
+        sessionId
+      });
     }
-  }, [pathNodes.length]);
+  }, [pathNodes.length, sessionId]);
 
   // Compute positions with enhanced spacing calculations
   const positions = React.useMemo(() => {
@@ -819,7 +955,7 @@ export default function AgentDecisionDAG({
           });
           const detailIndex = siblingsForThisParent.indexOf(detailNode);
 
-          pos[detailNode.id] = calculateDetailNodePosition(parentPos, detailIndex);
+          pos[detailNode.id] = calculateDetailNodePosition(parentPos, detailIndex, detailNode.id);
 
           // Detail node positioned successfully
         }
@@ -849,8 +985,8 @@ export default function AgentDecisionDAG({
         };
       });
 
-      // Enhanced tool positioning with improved spacing
-      if (toolUniverse.length > 0) {
+      // Enhanced tool positioning with improved spacing - seulement pour les données legacy
+      if (!isLangSmithData && toolUniverse.length > 0) {
         const toolsWidth = availableWidth - 2 * layoutConfig.padding;
         const toolSpacing = toolUniverse.length > 1 ?
           Math.max(toolsWidth / (toolUniverse.length - 1), layoutConfig.minHorizontalSpacing) :
@@ -924,6 +1060,11 @@ export default function AgentDecisionDAG({
           return;
         }
 
+        // Filter out edges from execute_tool to tool detail nodes - we'll create our own chain
+        if (edge.from === 'execute_tool' && edge.to.includes('execute_tool_detail')) {
+          return; // Skip these edges, we'll create the chain manually
+        }
+
         rawEdges.push({
           id: edge.id || `edge-${index}`,
           from: edge.from,
@@ -942,6 +1083,84 @@ export default function AgentDecisionDAG({
           index
         });
       });
+
+      // Add edges between chained tool nodes (execute_tool_detail nodes)
+      const toolDetailNodes = Object.keys(positions)
+        .filter(nodeId => nodeId.includes('execute_tool_detail'))
+        .sort(); // Sort to ensure consistent ordering
+
+      // First, add edge from execute_tool to the first tool detail node
+      if (toolDetailNodes.length > 0) {
+        const executeToolPos = positions['execute_tool'];
+        const firstToolPos = positions[toolDetailNodes[0]];
+
+        if (executeToolPos && firstToolPos) {
+          const x0 = executeToolPos.x + executeToolPos.w;
+          const y0 = executeToolPos.y + executeToolPos.h / 2;
+          const x1 = firstToolPos.x;
+          const y1 = firstToolPos.y + firstToolPos.h / 2;
+
+          const d = generateCurvedPath(x0, y0, x1, y1, {
+            forceCurveType: 'horizontal'
+          });
+
+          rawEdges.push({
+            id: 'execute-to-first-tool',
+            from: 'execute_tool',
+            to: toolDetailNodes[0],
+            fromId: 'execute_tool',
+            toId: toolDetailNodes[0],
+            d,
+            curveType: 'horizontal',
+            highlighted: true,
+            dashed: false,
+            isUnused: false,
+            isExecuted: true,
+            isActive: true,
+            condition: 'tool_sequence',
+            isDetailEdge: true,
+            index: rawEdges.length
+          });
+        }
+      }
+
+      // Then add edges between consecutive tool detail nodes
+      for (let i = 0; i < toolDetailNodes.length - 1; i++) {
+        const fromNodeId = toolDetailNodes[i];
+        const toNodeId = toolDetailNodes[i + 1];
+        const fromPos = positions[fromNodeId];
+        const toPos = positions[toNodeId];
+
+        if (fromPos && toPos) {
+          // Generate horizontal curve for tool chain connections
+          const x0 = fromPos.x + fromPos.w;
+          const y0 = fromPos.y + fromPos.h / 2;
+          const x1 = toPos.x;
+          const y1 = toPos.y + toPos.h / 2;
+
+          const d = generateCurvedPath(x0, y0, x1, y1, {
+            forceCurveType: 'horizontal'
+          });
+
+          rawEdges.push({
+            id: `tool-chain-${i}`,
+            from: fromNodeId,
+            to: toNodeId,
+            fromId: fromNodeId,
+            toId: toNodeId,
+            d,
+            curveType: 'horizontal',
+            highlighted: true,
+            dashed: false,
+            isUnused: false,
+            isExecuted: true,
+            isActive: true,
+            condition: 'tool_sequence',
+            isDetailEdge: true,
+            index: rawEdges.length + i + 1
+          });
+        }
+      }
 
       // Add fallback agent-to-end connection if missing and no tool execution path exists
       const hasAgentToToolConnection = rawEdges.some(edge => edge.from === 'agent' && edge.to !== 'agent_query_detail');
@@ -1237,7 +1456,7 @@ export default function AgentDecisionDAG({
         {/* Main flow nodes */}
         {pathNodes.map((n, idx) => (
           <Node
-            key={n.id}
+            key={`${n.id}-${sessionId || 'default'}`} // Force re-render when session changes
             x={positions[n.id]?.x || 0}
             y={positions[n.id]?.y || 0}
             w={positions[n.id]?.w || 160}

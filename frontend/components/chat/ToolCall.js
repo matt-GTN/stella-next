@@ -17,6 +17,7 @@ import {
   Settings,
   Wrench
 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Mapping des noms d'outils vers leurs icônes correspondantes
 const getToolIcon = (toolName) => {
@@ -51,25 +52,70 @@ const getToolIcon = (toolName) => {
   return iconMap[toolName] || iconMap.default;
 };
 
-// Mapping des noms d'outils vers des descriptions lisibles
-const getToolDescription = (toolName) => {
+// Mapping des noms d'outils vers des descriptions lisibles avec support multilingue
+const getToolDescription = (toolName, language = 'en') => {
   const descriptions = {
-    'search_ticker': 'Recherche de symbole boursier',
-    'fetch_data': 'Récupération des données financières',
-    'preprocess_data': 'Traitement des données',
-    'analyze_risks': 'Analyse des risques',
-    'compare_stocks': 'Comparaison d\'actions',
-    'display_raw_data': 'Affichage des données brutes',
-    'display_processed_data': 'Affichage des données traitées',
-    'display_price_chart': 'Graphique des prix',
-    'create_dynamic_chart': 'Création de graphique personnalisé',
-    'get_stock_news': 'Récupération des actualités',
-    'get_company_profile': 'Profil de l\'entreprise',
-    'calculate_financial_metrics': 'Calcul des métriques financières',
-    'value_analysis': 'Analyse de valorisation'
+    'search_ticker': {
+      fr: 'Recherche de symbole boursier',
+      en: 'Search Stock Ticker'
+    },
+    'fetch_data': {
+      fr: 'Récupération des données financières',
+      en: 'Fetch Financial Data'
+    },
+    'preprocess_data': {
+      fr: 'Traitement des données',
+      en: 'Process Data'
+    },
+    'analyze_risks': {
+      fr: 'Analyse des risques',
+      en: 'Risk Analysis'
+    },
+    'compare_stocks': {
+      fr: 'Comparaison d\'actions',
+      en: 'Compare Stocks'
+    },
+    'display_raw_data': {
+      fr: 'Affichage des données brutes',
+      en: 'Display Raw Data'
+    },
+    'display_processed_data': {
+      fr: 'Affichage des données traitées',
+      en: 'Display Processed Data'
+    },
+    'display_price_chart': {
+      fr: 'Graphique des prix',
+      en: 'Price Chart'
+    },
+    'create_dynamic_chart': {
+      fr: 'Création de graphique personnalisé',
+      en: 'Create Dynamic Chart'
+    },
+    'get_stock_news': {
+      fr: 'Récupération des actualités',
+      en: 'Get Stock News'
+    },
+    'get_company_profile': {
+      fr: 'Profil de l\'entreprise',
+      en: 'Company Profile'
+    },
+    'calculate_financial_metrics': {
+      fr: 'Calcul des métriques financières',
+      en: 'Calculate Financial Metrics'
+    },
+    'value_analysis': {
+      fr: 'Analyse de valorisation',
+      en: 'Value Analysis'
+    }
   };
 
-  return descriptions[toolName] || toolName;
+  const toolDesc = descriptions[toolName];
+  if (toolDesc && toolDesc[language]) {
+    return toolDesc[language];
+  }
+  
+  // Fallback to tool name if no translation found
+  return toolName;
 };
 
 // Rend chaque argument sous forme de "pill"
@@ -103,8 +149,9 @@ const renderArgPills = (args) => {
 };
 
 export default function ToolCall({ toolName, args = {} }) {
+  const { language, t } = useLanguage();
   const IconComponent = getToolIcon(toolName);
-  const description = getToolDescription(toolName);
+  const description = getToolDescription(toolName, language);
 
   return (
     <motion.div
@@ -143,7 +190,7 @@ export default function ToolCall({ toolName, args = {} }) {
       <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
         <Wrench className="w-3 h-3 text-gray-500" />
         <span className="text-[10px] text-gray-500 font-medium">
-          Outil appelé
+          {t('tools.called')}
         </span>
       </div>
     </motion.div>

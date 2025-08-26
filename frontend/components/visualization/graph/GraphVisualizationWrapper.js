@@ -68,15 +68,18 @@ const GraphVisualizationWrapper = ({
         
         console.log('🔍 [GraphWrapper] ID de session effectif:', effectiveSessionId);
         console.log('🔍 [GraphWrapper] Message ID:', messageId);
+        console.log('🔍 [GraphWrapper] Session ID from props:', sessionId);
+        console.log('🔍 [GraphWrapper] Session ID from message:', message?.sessionId);
         
         if (!effectiveSessionId && !messageId) {
           throw new Error('Aucun identifiant de message disponible');
         }
 
         // Create a unique cache key that includes message timestamp and content hash
+        // Force unique key every time to prevent any caching issues
         const messageHash = message ? 
-          `${messageId}-${message.timestamp || Date.now()}-${JSON.stringify(message.toolCalls || []).substring(0, 100)}-${Math.random()}` : 
-          `${messageId}-${Date.now()}-${Math.random()}`;
+          `${messageId}-${message.timestamp || Date.now()}-${JSON.stringify(message.toolCalls || []).substring(0, 100)}-${Math.random()}-${Date.now()}` : 
+          `${messageId}-${Date.now()}-${Math.random()}-${Date.now()}`;
 
         // Try LangSmith data first, but use message-specific session ID
         // This ensures each message gets its own trace visualization
@@ -85,6 +88,8 @@ const GraphVisualizationWrapper = ({
         if (effectiveSessionId) {
           try {
             console.log('🔍 [GraphWrapper] Tentative de récupération des données LangSmith pour:', effectiveSessionId);
+            console.log('🔍 [GraphWrapper] Message ID:', messageId, '| Session mapping should be unique per message');
+            console.log('🔍 [GraphWrapper] Making API call to:', `/api/langsmith-trace/${effectiveSessionId}`);
             // Pass message data with unique hash to ensure unique caching per message
             // Add _disableCache flag to force fresh data generation
             const messageWithHash = { ...message, _cacheKey: messageHash, _disableCache: true };
@@ -108,12 +113,10 @@ const GraphVisualizationWrapper = ({
           } catch (langsmithError) {
             console.warn('⚠️ [GraphWrapper] Erreur LangSmith pour message:', messageId, langsmithError.message);
             
-            // Check if it's a timeout error specifically
-            if (langsmithError.message.includes('timeout') || langsmithError.message.includes('Timeout')) {
-              console.warn('⏰ [GraphWrapper] Timeout détecté - fallback immédiat vers les données legacy');
-            } else {
-              console.warn('⚠️ [GraphWrapper] Autre erreur LangSmith - fallback vers les données legacy');
-            }
+            // Show all LangSmith errors to the user instead of falling back silently
+            // This includes rate limits, service unavailable, session not found, etc.
+            console.error('🚫 [GraphWrapper] Erreur LangSmith - affichage de l\'erreur à l\'utilisateur');
+            throw langsmithError; // Re-throw to show error message
           }
         }
 

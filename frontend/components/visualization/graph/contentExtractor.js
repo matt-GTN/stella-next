@@ -226,11 +226,12 @@ export function extractNodeContent(node, toolCalls, langsmithData, threadId) {
 
       case 'tool_execution':
         if (nodeId === 'execute_tool') {
-          const toolInfo = extractToolSummary(nodeToolCalls, nodeLangsmithData);
+          // Generic execute_tool node - don't show specific tool names
+          const toolCount = nodeToolCalls ? nodeToolCalls.length : 0;
           return {
-            primary: toolInfo.primary,
-            secondary: 'Tool Execution',
-            detail: toolInfo.detail,
+            primary: 'Execute Tools',
+            secondary: toolCount > 0 ? `${toolCount} tool${toolCount > 1 ? 's' : ''}` : 'Tool execution',
+            detail: 'Executing agent tools',
             source: 'tool_execution'
           };
         }
@@ -261,6 +262,7 @@ export function extractNodeContent(node, toolCalls, langsmithData, threadId) {
 
       case 'info_detail':
         // Detail nodes show specific information
+        console.log(`🔧 [ContentExtractor] Processing info_detail node: ${nodeId}`);
         if (nodeId === 'agent_query_detail') {
           const queryInfo = extractUserQuery(nodeToolCalls, nodeThreadId, nodeLangsmithData);
           return {
@@ -270,14 +272,85 @@ export function extractNodeContent(node, toolCalls, langsmithData, threadId) {
             source: 'query_detail'
           };
         }
-        if (nodeId === 'execute_tool_detail') {
-          const toolInfo = extractToolSummary(nodeToolCalls, nodeLangsmithData);
-          return {
-            primary: 'Executed Tools',
-            secondary: toolInfo.primary,
-            detail: toolInfo.detail,
-            source: 'tool_detail'
-          };
+        if (nodeId === 'execute_tool_detail' || nodeId.startsWith('execute_tool_detail_')) {
+          // For individual tool nodes, extract specific tool information with arguments
+          if (nodeId.startsWith('execute_tool_detail_')) {
+            const toolIndex = parseInt(nodeId.split('_').pop());
+            const specificToolCall = nodeToolCalls && nodeToolCalls[toolIndex] ? nodeToolCalls[toolIndex] : 
+                                   (nodeToolCalls && nodeToolCalls[0] ? nodeToolCalls[0] : null);
+            
+            // Debug logging
+            console.log(`🔧 [ContentExtractor] Processing ${nodeId}:`, {
+              toolIndex,
+              nodeToolCalls: nodeToolCalls?.length || 0,
+              specificToolCall: specificToolCall ? {
+                name: specificToolCall.name,
+                arguments: specificToolCall.arguments,
+                fullStructure: specificToolCall
+              } : null
+            });
+            
+            if (specificToolCall) {
+              const toolName = specificToolCall.name || specificToolCall.tool_name || 'Tool';
+              
+              // Try different argument structures
+              let args = specificToolCall.arguments || specificToolCall.args || {};
+              
+              // If arguments is a string, try to parse it
+              if (typeof args === 'string') {
+                try {
+                  args = JSON.parse(args);
+                } catch (e) {
+                  console.log(`🔧 [ContentExtractor] Failed to parse arguments string:`, args);
+                  args = {};
+                }
+              }
+              
+              // Extract key arguments to display
+              const keyArgs = [];
+              if (args.ticker) keyArgs.push(`ticker: ${args.ticker}`);
+              if (args.symbol) keyArgs.push(`symbol: ${args.symbol}`);
+              if (args.company) keyArgs.push(`company: ${args.company}`);
+              if (args.query) keyArgs.push(`query: ${args.query}`);
+              if (args.period) keyArgs.push(`period: ${args.period}`);
+              if (args.limit) keyArgs.push(`limit: ${args.limit}`);
+              
+              // If no key args found, show first few args
+              if (keyArgs.length === 0 && typeof args === 'object' && args !== null) {
+                const argEntries = Object.entries(args).slice(0, 2);
+                keyArgs.push(...argEntries.map(([key, value]) => `${key}: ${String(value).substring(0, 20)}`));
+              }
+              
+              console.log(`🔧 [ContentExtractor] Extracted for ${nodeId}:`, {
+                toolName,
+                args,
+                keyArgs
+              });
+              
+              return {
+                primary: formatToolName(toolName),
+                secondary: keyArgs.length > 0 ? keyArgs.slice(0, 2).join(', ') : 'No arguments',
+                detail: keyArgs.length > 0 ? keyArgs.join(' | ') : `Tool: ${toolName}`,
+                source: 'individual_tool_detail'
+              };
+            } else {
+              console.log(`🔧 [ContentExtractor] No tool call data for ${nodeId}`);
+              return {
+                primary: 'Tool',
+                secondary: 'No data',
+                detail: 'Tool execution',
+                source: 'individual_tool_detail'
+              };
+            }
+          } else {
+            // Fallback for generic execute_tool_detail - should not show tool names anymore
+            return {
+              primary: 'Tool Execution',
+              secondary: 'Multiple tools',
+              detail: 'Tools executed successfully',
+              source: 'tool_detail'
+            };
+          }
         }
         break;
 

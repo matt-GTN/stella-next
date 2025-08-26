@@ -22,6 +22,15 @@ const CACHE_TIMEOUT = 5 * 60 * 1000;
  * @returns {Object} Données formatées pour le graphique
  */
 export function transformLangSmithData(langsmithData, currentStep = -1, language = 'en') {
+  console.log('🔍 [LangSmith Transform] Starting transformation with data:', {
+    hasData: !!langsmithData,
+    hasToolCalls: !!(langsmithData?.tool_calls),
+    toolCallsCount: langsmithData?.tool_calls?.length || 0,
+    hasExecutionPath: !!(langsmithData?.execution_path),
+    executionPath: langsmithData?.execution_path,
+    userQuery: langsmithData?.user_query
+  });
+
   if (!langsmithData || (!langsmithData.tool_calls && !langsmithData.execution_path)) {
     console.warn('Données LangSmith invalides ou manquantes');
     return {
@@ -55,7 +64,9 @@ export function transformLangSmithData(langsmithData, currentStep = -1, language
     console.log('✅ [LangSmith Transform] Generated graph:', {
       nodes: nodes.length,
       edges: edges.length,
-      executedTools: executedTools.length
+      executedTools: executedTools.length,
+      nodeIds: nodes.map(n => n.id),
+      detailNodes: nodes.filter(n => n.isDetailNode).map(n => ({ id: n.id, label: n.label }))
     });
 
     return {
@@ -211,10 +222,45 @@ function createLangSmithNodes(langsmithData, language = 'en') {
   const executeToolNode = nodes.find(n => n.id === 'execute_tool' && n.isExecuted);
 
   if (agentNode) {
+    // Extract actual user query from LangSmith data - ALWAYS use the actual query
+    let userQuery = langsmithData.user_query;
+    console.log('🔍 [LangSmith Transform] Processing agent node, user_query:', langsmithData.user_query);
+    console.log('🔍 [LangSmith Transform] User query type:', typeof langsmithData.user_query);
+    console.log('🔍 [LangSmith Transform] User query length:', langsmithData.user_query?.length);
+    console.log('🔍 [LangSmith Transform] Full langsmithData keys:', Object.keys(langsmithData));
+    
+    if (langsmithData.user_query && langsmithData.user_query.trim()) {
+      // Use the actual user query, truncate if too long
+      userQuery = langsmithData.user_query.length > 50 
+        ? langsmithData.user_query.substring(0, 50) + '...'
+        : langsmithData.user_query;
+      console.log('✅ [LangSmith Transform] Using actual user query:', userQuery);
+    } else {
+      // Try to extract from tool calls if no direct user query
+      if (tool_calls && tool_calls.length > 0) {
+        const firstTool = tool_calls[0];
+        if (firstTool.arguments?.ticker) {
+          userQuery = `Analyze ${firstTool.arguments.ticker}`;
+        } else if (firstTool.arguments?.symbol) {
+          userQuery = `Analyze ${firstTool.arguments.symbol}`;
+        } else if (firstTool.arguments?.company) {
+          userQuery = `Analyze ${firstTool.arguments.company}`;
+        } else {
+          userQuery = language === 'fr' ? 'Requête Utilisateur' : 'User Query';
+        }
+      } else {
+        userQuery = language === 'fr' ? 'Requête Utilisateur' : 'User Query';
+      }
+      console.log('⚠️ [LangSmith Transform] No direct user_query found, using extracted/fallback:', userQuery);
+    }
+    
     nodes.push({
       id: 'agent_query_detail',
       type: 'info_detail',
-      label: { fr: 'Requête Utilisateur', en: 'User Query' },
+      label: { 
+        fr: userQuery, 
+        en: userQuery 
+      },
       icon: '💬',
       isActive: true,
       isExecuted: true,
@@ -227,11 +273,72 @@ function createLangSmithNodes(langsmithData, language = 'en') {
     });
   }
 
-  if (executeToolNode) {
+  if (executeToolNode && tool_calls && tool_calls.length > 0) {
+    console.log('🔍 [LangSmith Transform] Processing execute_tool node with', tool_calls.length, 'tool calls');
+    console.log('🔍 [LangSmith Transform] Tool calls data:', tool_calls);
+    
+    // Create specific nodes for each tool used - show ACTUAL tool names with arguments
+    tool_calls.forEach((toolCall, index) => {
+      const toolConfig = getToolConfig(toolCall.name);
+      
+      // Create a descriptive label showing tool name and main argument
+      let toolLabel = toolCall.name;
+      if (toolCall.arguments) {
+        const mainArg = toolCall.arguments.ticker || 
+                       toolCall.arguments.symbol || 
+                       toolCall.arguments.company ||
+                       toolCall.arguments.query;
+        if (mainArg) {
+          toolLabel = `${toolCall.name}(${mainArg})`;
+        }
+      }
+      
+      console.log(`✅ [LangSmith Transform] Creating tool node ${index}: ${toolCall.name} -> ${toolLabel}`);
+      
+      nodes.push({
+        id: `execute_tool_detail_${index}`,
+        type: 'info_detail',
+        label: { 
+          fr: toolLabel, 
+          en: toolLabel 
+        },
+        icon: toolConfig.icon,
+        isActive: true,
+        isExecuted: true,
+        isExecuting: false,
+        isDetailNode: true,
+        parentNode: 'execute_tool',
+        position: { x: 0, y: 0 },
+        toolCall: toolCall,
+        rawToolCalls: tool_calls,
+        rawThreadId: thread_id
+      });
+    });
+  } else if (executeToolNode) {
+    console.log('⚠️ [LangSmith Transform] Execute tool node found but no tool calls, using fallback');
+    // Show actual tool names if available, otherwise use fallback
+    let toolSummary = '';
+    if (tool_calls && tool_calls.length > 0) {
+      // Create a summary with tool names and main arguments
+      const toolDescriptions = tool_calls.map(tc => {
+        const mainArg = tc.arguments?.ticker || 
+                       tc.arguments?.symbol || 
+                       tc.arguments?.company ||
+                       tc.arguments?.query;
+        return mainArg ? `${tc.name}(${mainArg})` : tc.name;
+      });
+      const toolNames = toolDescriptions.join(', ');
+      toolSummary = toolNames.length > 50 ? toolNames.substring(0, 50) + '...' : toolNames;
+    }
+    const fallbackLabel = language === 'fr' ? 'Outils Exécutés' : 'Executed Tools';
+    
     nodes.push({
       id: 'execute_tool_detail',
       type: 'info_detail',
-      label: { fr: 'Outils Exécutés', en: 'Executed Tools' },
+      label: { 
+        fr: toolSummary || fallbackLabel, 
+        en: toolSummary || fallbackLabel 
+      },
       icon: '🛠️',
       isActive: true,
       isExecuted: true,
@@ -242,6 +349,8 @@ function createLangSmithNodes(langsmithData, language = 'en') {
       rawToolCalls: tool_calls,
       rawThreadId: thread_id
     });
+  } else {
+    console.log('⚠️ [LangSmith Transform] No execute_tool node found or no tool calls');
   }
 
   return nodes;
@@ -324,7 +433,7 @@ function createLangSmithEdges(langsmithData, nodes) {
 
   // Add edges for detail nodes
   const hasAgentDetail = nodes.some(n => n.id === 'agent_query_detail');
-  const hasExecuteToolDetail = nodes.some(n => n.id === 'execute_tool_detail');
+  const executeToolDetailNodes = nodes.filter(n => n.id.startsWith('execute_tool_detail'));
 
   if (hasAgentDetail) {
     edges.push({
@@ -339,18 +448,19 @@ function createLangSmithEdges(langsmithData, nodes) {
     });
   }
 
-  if (hasExecuteToolDetail) {
+  // Create edges for each tool detail node
+  executeToolDetailNodes.forEach((detailNode, index) => {
     edges.push({
-      id: 'execute_tool-execute_tool_detail',
+      id: `execute_tool-${detailNode.id}`,
       from: 'execute_tool',
-      to: 'execute_tool_detail',
+      to: detailNode.id,
       condition: 'detail_connection',
       isActive: true,
       isExecuted: true,
       isDetailEdge: true,
-      index: edges.length
+      index: edges.length + index
     });
-  }
+  });
 
   return edges;
 }
@@ -564,10 +674,15 @@ async function performLangSmithRequest(sessionId) {
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes
   
   try {
-    const response = await fetch(apiUrl, {
+    // Add cache-busting parameter with random component
+    const cacheBustUrl = `${apiUrl}?t=${Date.now()}&r=${Math.random()}`;
+    
+    const response = await fetch(cacheBustUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       },
       signal: controller.signal
     });
@@ -646,7 +761,7 @@ export async function getLangSmithGraphData(sessionId, currentStep = -1, languag
   console.log('🔍 [LangSmith] getLangSmithGraphData appelé pour session:', sessionId);
   
   // Check if caching is disabled for this message
-  const disableCache = messageData?._disableCache;
+  const disableCache = messageData?._disableCache || true; // Force disable cache for now
   
   // Check transformed data cache first - include message data for unique caching
   const transformedCacheKey = generateLangSmithCacheKey(sessionId, currentStep, language, messageData);
@@ -664,9 +779,12 @@ export async function getLangSmithGraphData(sessionId, currentStep = -1, languag
   try {
     const langsmithData = await fetchLangSmithTrace(sessionId);
     console.log('🔍 [LangSmith] Données brutes récupérées:', langsmithData);
+    console.log('🔍 [LangSmith] User query dans les données:', langsmithData.user_query);
+    console.log('🔍 [LangSmith] Tool calls dans les données:', langsmithData.tool_calls);
     
     const transformedData = transformLangSmithData(langsmithData, currentStep, language);
     console.log('🔍 [LangSmith] Données transformées:', transformedData);
+    console.log('🔍 [LangSmith] Nodes créés:', transformedData.nodes?.map(n => ({ id: n.id, label: n.label })));
     
     // Cache the transformed data with message-specific key (only if caching is enabled)
     if (!disableCache) {

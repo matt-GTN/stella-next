@@ -37,6 +37,18 @@ export default function Home() {
     // Générer des IDs uniques et séquentiels
     const userMessageId = `user-${messageCounter}`;
     const assistantMessageId = `assistant-${messageCounter + 1}`;
+    
+    // Generate a unique session ID for this specific conversation
+    // This ensures each message gets its own LangSmith thread
+    const uniqueSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log('🔍 [Page] Sending message with IDs:', {
+      userMessageId,
+      assistantMessageId,
+      currentMessageCounter: messageCounter,
+      uniqueSessionId,
+      content: content.substring(0, 50) + '...'
+    });
 
     // Ajouter le message utilisateur
     const userMessage = {
@@ -61,23 +73,28 @@ export default function Home() {
       phases: [], // Historique des phases de traitement
       toolCalls: [], // Initialiser le tableau des appels d'outils
       initialContent: '',
-      finalContent: ''
+      finalContent: '',
+      sessionId: uniqueSessionId // Store the unique session ID for graph visualization
     };
 
     setMessages(prev => [...prev, initialAssistantMessage]);
     setIsLoading(false);
 
     // Incrémenter le compteur pour les prochains messages
-    setMessageCounter(prev => prev + 2);
+    setMessageCounter(prev => {
+      const newCounter = prev + 2;
+      console.log('🔍 [Page] Incrementing messageCounter:', prev, '→', newCounter);
+      return newCounter;
+    });
 
     try {
       // Essayer d'abord le streaming SSE
       const useSSE = true; // Changer à false pour utiliser l'ancienne méthode
 
       if (useSSE) {
-        await handleSSEStreaming(content, assistantMessageId);
+        await handleSSEStreaming(content, assistantMessageId, uniqueSessionId);
       } else {
-        await handleRegularRequest(content, assistantMessageId);
+        await handleRegularRequest(content, assistantMessageId, uniqueSessionId);
       }
 
     } catch (error) {
@@ -100,7 +117,7 @@ export default function Home() {
   };
 
   // Fonction pour gérer le streaming SSE
-  const handleSSEStreaming = async (content, assistantMessageId) => {
+  const handleSSEStreaming = async (content, assistantMessageId, uniqueSessionId) => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -108,7 +125,7 @@ export default function Home() {
       },
       body: JSON.stringify({
         message: content,
-        session_id: sessionId, // Inclure l'ID de session pour maintenir le contexte
+        session_id: uniqueSessionId, // Use unique session ID for each message
         stream: true
       }),
     });
@@ -330,7 +347,7 @@ export default function Home() {
   };
 
   // Fonction pour gérer les requêtes normales (fallback)
-  const handleRegularRequest = async (content, assistantMessageId) => {
+  const handleRegularRequest = async (content, assistantMessageId, uniqueSessionId) => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -338,7 +355,7 @@ export default function Home() {
       },
       body: JSON.stringify({
         message: content,
-        session_id: sessionId, // Inclure l'ID de session pour maintenir le contexte
+        session_id: uniqueSessionId, // Use unique session ID for each message
         stream: false
       }),
     });

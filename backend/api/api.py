@@ -386,12 +386,16 @@ async def get_mock_langsmith_trace():
 
 # LangSmith trace data endpoint
 @app.get("/langsmith-trace/{session_id}", response_model=LangSmithTraceResponse)
-async def get_langsmith_trace(session_id: str):
+async def get_langsmith_trace(session_id: str, run_id: str = None):
     """
     Get LangSmith trace data for graph visualization
+    
+    Args:
+        session_id: The thread/session ID
+        run_id: Optional specific run ID to filter to a single run within the thread
     """
     try:
-        logger.info(f"Retrieving LangSmith trace for session: {session_id}")
+        logger.info(f"Retrieving LangSmith trace for session: {session_id}" + (f" with specific run_id: {run_id}" if run_id else ""))
         
         # Change to agent directory for execution
         current_dir = os.getcwd()
@@ -404,10 +408,10 @@ async def get_langsmith_trace(session_id: str):
             
             async def get_trace_with_timeout():
                 loop = asyncio.get_event_loop()
-                return await loop.run_in_executor(None, get_langsmith_trace_data, session_id)
+                return await loop.run_in_executor(None, get_langsmith_trace_data, session_id, run_id)
             
-            # Timeout après 15 secondes
-            trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=15.0)
+            # Timeout après 30 secondes pour permettre le traitement de grandes traces
+            trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=30.0)
             
             if not trace_data:
                 logger.warning(f"No trace data found for session {session_id}")
@@ -436,7 +440,7 @@ async def get_langsmith_trace(session_id: str):
             
             raise HTTPException(
                 status_code=408,
-                detail=f"Timeout while fetching LangSmith trace data for session {session_id}. The LangSmith API took too long to respond. Check your network connection and try again."
+                detail=f"Timeout while fetching LangSmith trace data for session {session_id}. This session has a large number of runs ({session_id}). The trace processing took longer than 30 seconds. Try using a more recent session ID or check the backend logs for details."
             )
         except Exception as inner_error:
             logger.error(f"Error during trace retrieval: {type(inner_error).__name__}: {inner_error}", exc_info=True)

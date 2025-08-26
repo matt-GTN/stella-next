@@ -509,7 +509,7 @@ export default function ChatMessage({ message: rawMessage, messageIndex = null }
                                 key={`graph-wrapper-${message.id}`} // Ensure unique instance per message
                                 message={message}
                                 language={language}
-                                sessionId={message.id} // Use message ID as unique identifier for each message's trace
+                                sessionId={message.sessionId || message.id} // Use message's unique session ID for trace, fallback to message ID
                               />
                             </div>
                           </div>
