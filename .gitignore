@@ -39,3 +39,5 @@ build/
 
 /.kiro
 /venv
+*/chroma_research_db
+*/.next

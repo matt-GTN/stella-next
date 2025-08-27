@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getBestBackendUrl } from '../../../utils/backendConfig.js';
 
 export async function POST(request) {
   try {
@@ -72,7 +73,7 @@ export async function POST(request) {
 // Fonction pour les requêtes non-streaming (fallback)
 async function handleNonStreamingRequest(message, session_id, message_session_id) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://app-stella-backend:8000';
+    const backendUrl = await getBestBackendUrl();
     
     const response = await fetch(`${backendUrl}/chat`, {
       method: 'POST',
@@ -118,7 +119,7 @@ async function handleNonStreamingRequest(message, session_id, message_session_id
 // Fonction pour gérer le streaming
 async function handleStreamingRequest(message, session_id, message_session_id, sendSSE, controller) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://app-stella-backend:8000';
+    const backendUrl = await getBestBackendUrl();
     
     console.log(`🔗 [Streaming] Connecting to backend: ${backendUrl}/chat/stream`);
     
