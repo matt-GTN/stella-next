@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Stella - Assistant IA",
-  description: "Stella, l'assistant IA de Mathis - Expert en développement, IA et analyse de données",
+  title: "Stella - Analyste financier IA",
+  description: "Stella, spécialiste financière, vous permet de faire de la gestion de risques et de la génération de données directement en langage naturel, sans connaissances préalables.",
 };
 
 export const viewport = {
