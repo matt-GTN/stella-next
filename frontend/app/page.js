@@ -6,6 +6,7 @@ import ChatContainer from "@/components/chat/ChatContainer";
 import ThreadsBackground from '@/components/backgrounds/ThreadsBackground';
 import GitHubButton from '@/components/GitHubButton';
 
+
 /**
  * Page d'accueil principale de l'application Stella
  * Gère l'interface de chat avec l'assistant financier IA
@@ -26,7 +27,7 @@ export default function Home() {
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState(null); // Gérer l'ID de session pour maintenir le contexte
+  const [conversationSessionId, setConversationSessionId] = useState(null); // Session ID persistante pour la conversation
   const [messageCounter, setMessageCounter] = useState(2); // Compteur pour les IDs de messages
 
   /**
@@ -38,15 +39,23 @@ export default function Home() {
     const userMessageId = `user-${messageCounter}`;
     const assistantMessageId = `assistant-${messageCounter + 1}`;
     
-    // Generate a unique session ID for this specific conversation
-    // This ensures each message gets its own LangSmith thread
-    const uniqueSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate or use existing conversation session ID for agent memory
+    const currentConversationSessionId = conversationSessionId || `conversation_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    
+    // Generate unique message session ID for graph visualization
+    const messageSessionId = `message_${assistantMessageId}_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-    console.log('🔍 [Page] Sending message with IDs:', {
+    // Set conversation session ID if it's the first message
+    if (!conversationSessionId) {
+      setConversationSessionId(currentConversationSessionId);
+    }
+
+    console.log('🔍 [Page] Sending message with dual session system:', {
       userMessageId,
       assistantMessageId,
       currentMessageCounter: messageCounter,
-      uniqueSessionId,
+      conversationSessionId: currentConversationSessionId,
+      messageSessionId,
       content: content.substring(0, 50) + '...'
     });
 
@@ -74,7 +83,8 @@ export default function Home() {
       toolCalls: [], // Initialiser le tableau des appels d'outils
       initialContent: '',
       finalContent: '',
-      sessionId: uniqueSessionId // Store the unique session ID for graph visualization
+      sessionId: messageSessionId, // Unique session ID for graph visualization
+      conversationSessionId: currentConversationSessionId // Persistent session ID for agent memory
     };
 
     setMessages(prev => [...prev, initialAssistantMessage]);
@@ -92,9 +102,9 @@ export default function Home() {
       const useSSE = true; // Changer à false pour utiliser l'ancienne méthode
 
       if (useSSE) {
-        await handleSSEStreaming(content, assistantMessageId, uniqueSessionId);
+        await handleSSEStreaming(content, assistantMessageId, currentConversationSessionId, messageSessionId);
       } else {
-        await handleRegularRequest(content, assistantMessageId, uniqueSessionId);
+        await handleRegularRequest(content, assistantMessageId, currentConversationSessionId, messageSessionId);
       }
 
     } catch (error) {
@@ -117,7 +127,7 @@ export default function Home() {
   };
 
   // Fonction pour gérer le streaming SSE
-  const handleSSEStreaming = async (content, assistantMessageId, uniqueSessionId) => {
+  const handleSSEStreaming = async (content, assistantMessageId, conversationSessionId, messageSessionId) => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -125,7 +135,8 @@ export default function Home() {
       },
       body: JSON.stringify({
         message: content,
-        session_id: uniqueSessionId, // Use unique session ID for each message
+        session_id: conversationSessionId, // Use persistent conversation session ID for agent memory
+        message_session_id: messageSessionId, // Include message session ID for graph visualization
         stream: true
       }),
     });
@@ -153,15 +164,19 @@ export default function Home() {
 
             // Gérer l'ID de session
             if (data.type === 'session_id') {
-              console.log('Session ID reçu:', data.session_id);
-              setSessionId(data.session_id);
-              // Ajouter le sessionId au message assistant actuel
+              console.log('Session IDs reçus:', {
+                conversation: data.session_id,
+                message: data.message_session_id || messageSessionId
+              });
+              // Update the message with both session IDs
               setMessages(prev =>
                 prev.map(msg =>
                   msg.id === assistantMessageId
                     ? {
                       ...msg,
-                      sessionId: data.session_id
+                      sessionId: data.message_session_id || messageSessionId, // Message session ID for graph visualization
+                      conversationSessionId: data.session_id, // Conversation session ID from backend
+                      backendSessionId: data.session_id // Also store as backup
                     }
                     : msg
                 )
@@ -254,7 +269,8 @@ export default function Home() {
                       news_data: data.news_data || null,
                       has_profile: !!data.has_profile,
                       profile_data: data.profile_data || null,
-                      sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
+                      sessionId: messageSessionId, // Keep message session ID for graph visualization
+                      conversationSessionId: conversationSessionId // Maintain conversation session ID
                     }
                     : msg
                 )
@@ -316,7 +332,8 @@ export default function Home() {
                       ...msg,
                       toolCalls: existingToolCalls.concat([toolCall]),
                       phases: existingPhases.concat([{ type: 'tool_call', content: `Appel d'outil: ${toolCall.name}`, timestamp: new Date() }]),
-                      sessionId: sessionId || msg.sessionId // S'assurer que le sessionId est présent
+                      sessionId: messageSessionId, // Keep message session ID for graph visualization
+                      conversationSessionId: conversationSessionId // Maintain conversation session ID
                     };
                   }
                   return msg;
@@ -347,7 +364,7 @@ export default function Home() {
   };
 
   // Fonction pour gérer les requêtes normales (fallback)
-  const handleRegularRequest = async (content, assistantMessageId, uniqueSessionId) => {
+  const handleRegularRequest = async (content, assistantMessageId, conversationSessionId, messageSessionId) => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -355,7 +372,8 @@ export default function Home() {
       },
       body: JSON.stringify({
         message: content,
-        session_id: uniqueSessionId, // Use unique session ID for each message
+        session_id: conversationSessionId, // Use persistent conversation session ID for agent memory
+        message_session_id: messageSessionId, // Include message session ID for graph visualization
         stream: false
       }),
     });
@@ -450,6 +468,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+
     </div>
   );
 }

@@ -70,6 +70,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    message_session_id: Optional[str] = None  # For graph visualization
 
 class ChatResponse(BaseModel):
     response: str
@@ -136,17 +137,33 @@ async def chat_with_stella_stream(request: ChatRequest):
     """
     async def generate_sse_stream():
         try:
-            # Generate session ID if not provided
-            session_id = request.session_id or f"session_{uuid.uuid4()}"
+            # Generate conversation session ID if not provided (for agent memory)
+            conversation_session_id = request.session_id or f"conversation_{uuid.uuid4()}"
             
-            logger.info(f"Processing streaming message for session {session_id}: {request.message[:100]}...")
+            # Generate message session ID if not provided (for graph visualization)
+            message_session_id = request.message_session_id or f"message_{uuid.uuid4()}"
             
-            # Send session ID first
-            yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
+            logger.info(f"Processing streaming message - Conversation: {conversation_session_id}, Message: {message_session_id}: {request.message[:100]}...")
             
-            # Prepare the message for the agent
-            config = {"configurable": {"thread_id": session_id}}
+            # Send session IDs first
+            yield f"data: {json.dumps({'type': 'session_id', 'session_id': conversation_session_id, 'message_session_id': message_session_id})}\n\n"
+            
+            # Prepare the message for the agent using conversation session ID for memory
+            config = {"configurable": {"thread_id": conversation_session_id}}
             inputs = {"messages": [HumanMessage(content=request.message)]}
+            
+            # Register the session mapping for graph visualization
+            if message_session_id and conversation_session_id:
+                # Import the mapping function
+                from agent import register_message_session_mapping
+                register_message_session_mapping(message_session_id, conversation_session_id)
+                logger.info(f"📝 Registered session mapping: {message_session_id} -> {conversation_session_id}")
+            
+            # Add message session ID to config for LangSmith tracking
+            config["metadata"] = {
+                "message_session_id": message_session_id,
+                "conversation_session_id": conversation_session_id
+            }
             
             # Run the agent with streaming
             try:
@@ -403,12 +420,22 @@ async def get_langsmith_trace(session_id: str, run_id: str = None):
         os.chdir(agent_dir)
         
         try:
+            # Import session mapping functions
+            from agent import get_conversation_session_id, get_langsmith_trace_data_for_message
+            
+            # Get the actual conversation session ID for LangSmith lookup
+            conversation_session_id = get_conversation_session_id(session_id)
+            
+            logger.info(f"Session ID mapping: {session_id} -> {conversation_session_id}")
+            
             # Get the trace data using the new function with timeout
             import asyncio
             
             async def get_trace_with_timeout():
                 loop = asyncio.get_event_loop()
-                return await loop.run_in_executor(None, get_langsmith_trace_data, session_id, run_id)
+                # Pass both the conversation session ID and the original message session ID
+                # so we can filter the results to show only the relevant tools for this message
+                return await loop.run_in_executor(None, get_langsmith_trace_data_for_message, conversation_session_id, session_id, run_id)
             
             # Timeout après 30 secondes pour permettre le traitement de grandes traces
             trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=30.0)
@@ -424,7 +451,7 @@ async def get_langsmith_trace(session_id: str, run_id: str = None):
             logger.info(f"Trace data retrieved for session {session_id}: {len(trace_data['tool_calls'])} tool calls, status: {trace_data['status']}")
             
             response = LangSmithTraceResponse(
-                thread_id=trace_data['thread_id'],
+                thread_id=str(trace_data['thread_id']),
                 tool_calls=trace_data['tool_calls'],
                 execution_path=trace_data['execution_path'],
                 graph_structure=trace_data['graph_structure'],
@@ -810,13 +837,28 @@ async def chat_with_stella(request: ChatRequest):
     Chat with Stella financial assistant
     """
     try:
-        # Generate session ID if not provided
-        session_id = request.session_id or f"session_{uuid.uuid4()}"
+        # Generate conversation session ID if not provided (for agent memory)
+        conversation_session_id = request.session_id or f"conversation_{uuid.uuid4()}"
         
-        logger.info(f"Processing message for session {session_id}: {request.message[:100]}...")
+        # Generate message session ID if not provided (for graph visualization)
+        message_session_id = request.message_session_id or f"message_{uuid.uuid4()}"
         
-        # Prepare the message for the agent
-        config = {"configurable": {"thread_id": session_id}}
+        logger.info(f"Processing message - Conversation: {conversation_session_id}, Message: {message_session_id}: {request.message[:100]}...")
+        
+        # Register the session mapping for graph visualization
+        if message_session_id and conversation_session_id:
+            from agent import register_message_session_mapping
+            register_message_session_mapping(message_session_id, conversation_session_id)
+            logger.info(f"📝 Registered session mapping: {message_session_id} -> {conversation_session_id}")
+        
+        # Prepare the message for the agent using conversation session ID for memory
+        config = {
+            "configurable": {"thread_id": conversation_session_id},
+            "metadata": {
+                "message_session_id": message_session_id,
+                "conversation_session_id": conversation_session_id
+            }
+        }
         inputs = {"messages": [HumanMessage(content=request.message)]}
         
         # Run the agent (convert to async)
@@ -882,7 +924,7 @@ async def chat_with_stella(request: ChatRequest):
         # Build response
         response = ChatResponse(
             response=response_text,
-            session_id=session_id,
+            session_id=conversation_session_id,
             has_chart=chart_data is not None,
             chart_data=chart_data,
             has_dataframe=dataframe_data is not None,
@@ -895,7 +937,7 @@ async def chat_with_stella(request: ChatRequest):
             timestamp=datetime.now().isoformat()
         )
         
-        logger.info(f"Successfully processed message for session {session_id}")
+        logger.info(f"Successfully processed message for conversation session {conversation_session_id}")
         return response
         
     except HTTPException:

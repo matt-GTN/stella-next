@@ -70,6 +70,12 @@ LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
 LANGSMITH_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "stella")
 
+# Session mapping for dual session system
+# Maps message session IDs to conversation session IDs for graph visualization
+MESSAGE_TO_CONVERSATION_MAPPING = {}
+# Maps message session IDs to LangGraph run IDs for specific trace retrieval
+MESSAGE_TO_RUN_MAPPING = {}
+
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
@@ -341,6 +347,14 @@ def agent_node(state: AgentState):
 
     # On ajoute l'historique de la conversation depuis l'état
     current_messages.extend(state['messages'])
+    
+    # 🧠 MEMORY DEBUG: Show conversation history being used
+    conversation_history = [msg for msg in state['messages'] if isinstance(msg, (HumanMessage, AIMessage)) and hasattr(msg, 'content')]
+    print(f"🧠 [MEMORY] Using conversation history: {len(conversation_history)} messages")
+    for i, msg in enumerate(conversation_history[-3:]):  # Show last 3 messages
+        msg_type = "Human" if isinstance(msg, HumanMessage) else "AI"
+        content_preview = (msg.content or "")[:100] + "..." if len(msg.content or "") > 100 else (msg.content or "")
+        print(f"   [{i+1}] {msg_type}: {content_preview}")
 
     # 🕐 TIMING: Start measuring LLM inference time
     import time
@@ -1034,6 +1048,88 @@ def get_agent_app():
 
 app = get_agent_app()
 
+# --- Session mapping functions for dual session system ---
+def register_message_session_mapping(message_session_id: str, conversation_session_id: str):
+    """Register mapping between message session ID and conversation session ID"""
+    MESSAGE_TO_CONVERSATION_MAPPING[message_session_id] = conversation_session_id
+    print(f"📝 Registered session mapping: {message_session_id} -> {conversation_session_id}")
+
+def get_conversation_session_id(session_id: str) -> str:
+    """Get conversation session ID from either message or conversation session ID"""
+    # If it's already a conversation session ID, return as is
+    if session_id.startswith('conversation_'):
+        print(f"🔍 Session mapping: {session_id} is already a conversation ID")
+        return session_id
+    
+    # If it's a message session ID, return the mapped conversation session ID
+    if session_id in MESSAGE_TO_CONVERSATION_MAPPING:
+        conversation_id = MESSAGE_TO_CONVERSATION_MAPPING[session_id]
+        print(f"🔍 Session mapping lookup: {session_id} -> {conversation_id}")
+        return conversation_id
+    
+    # If no mapping found, return as is (fallback)
+    print(f"🔍 Session mapping: No mapping found for {session_id}, using as-is")
+    return session_id
+
+def get_langsmith_trace_data_for_message(conversation_session_id: str, message_session_id: str, run_id: str = None):
+    """
+    Get LangSmith trace data filtered for a specific message within a conversation.
+    This function looks for LangGraph runs that have the specific message session ID
+    in their metadata.
+    """
+    print(f"🔍 Getting trace data for message {message_session_id} in conversation {conversation_session_id}")
+    
+    try:
+        from langsmith import Client
+        client = Client()
+        project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
+        
+        # Get recent runs and look for ones with our message session ID in metadata
+        recent_runs = list(client.list_runs(
+            project_name=project_name,
+            limit=200  # Increase limit to find the specific run
+        ))
+        
+        print(f"🔍 Searching through {len(recent_runs)} runs for message session ID: {message_session_id}")
+        
+        # Look for LangGraph runs that have our message session ID in metadata
+        target_run = None
+        for run in recent_runs:
+            if run.name == "LangGraph":
+                # Check if this run has our message session ID in metadata
+                if hasattr(run, 'extra') and run.extra:
+                    metadata = run.extra.get('metadata', {})
+                    if metadata.get('message_session_id') == message_session_id:
+                        target_run = run
+                        print(f"✅ Found LangGraph run with message session ID: {str(run.id)[:8]}...")
+                        break
+        
+        if not target_run:
+            print(f"⚠️  No LangGraph run found with message session ID {message_session_id}")
+            print(f"🔄 Falling back to conversation-level trace data")
+            # Fallback to conversation-level data
+            return get_langsmith_trace_data(conversation_session_id, run_id)
+        
+        # Get trace data for the specific run
+        actual_thread_id = target_run.session_id or target_run.thread_id or str(target_run.id)
+        print(f"🎯 Using thread ID: {actual_thread_id}")
+        
+        # Use the existing function but with the specific run's thread ID
+        trace_data = get_langsmith_trace_data(actual_thread_id, str(target_run.id))
+        
+        if trace_data:
+            trace_data['message_session_id'] = message_session_id
+            trace_data['conversation_session_id'] = conversation_session_id
+            trace_data['specific_run_found'] = True
+            print(f"✅ Returning specific trace data for message {message_session_id}")
+        
+        return trace_data
+        
+    except Exception as e:
+        print(f"❌ Error getting trace data for message {message_session_id}: {e}")
+        print(f"🔄 Falling back to conversation-level trace data")
+        # Fallback to conversation-level data
+        return get_langsmith_trace_data(conversation_session_id, run_id)
 
 # --- Crée une animation du workflow ---
 def find_actual_thread_id(requested_thread_id: str, client) -> Optional[str]:
@@ -1247,18 +1343,19 @@ def get_langsmith_trace_data(thread_id: str, run_id: str = None):
         print(f"   Requested thread_id: {thread_id}")
         
         # For frontend session IDs (assistant-X), always use the most recent LangGraph run
-        actual_thread_id = thread_id
-        if thread_id.startswith('assistant-'):
+        actual_thread_id = str(thread_id)  # Convert to string to handle UUID objects
+        thread_id_str = str(thread_id)
+        if thread_id_str.startswith('assistant-'):
             print(f"   Frontend session ID detected, finding most recent LangGraph run...")
-            mapped_thread_id = find_actual_thread_id(thread_id, client)
+            mapped_thread_id = find_actual_thread_id(thread_id_str, client)
             if mapped_thread_id:
                 actual_thread_id = mapped_thread_id
                 print(f"   ✅ Using most recent session: {actual_thread_id}")
             else:
-                print(f"   ⚠️  Could not find recent session, using original: {thread_id}")
-        elif not ('-' in thread_id and len(thread_id) == 36):
+                print(f"   ⚠️  Could not find recent session, using original: {thread_id_str}")
+        elif not ('-' in thread_id_str and len(thread_id_str) == 36):
             print(f"   Non-UUID format detected, searching for mapping...")
-            mapped_thread_id = find_actual_thread_id(thread_id, client)
+            mapped_thread_id = find_actual_thread_id(thread_id_str, client)
             if mapped_thread_id:
                 actual_thread_id = mapped_thread_id
                 print(f"   ✅ Mapped to LangSmith thread_id: {actual_thread_id}")
@@ -1419,9 +1516,10 @@ def get_langsmith_trace_data(thread_id: str, run_id: str = None):
                         if thread_id in tid or tid in thread_id:
                             print(f"      ⚠️  Similar ID found: {tid}")
                         # Check if it's a UUID vs session format mismatch
-                        if len(thread_id) == 36 and '-' in thread_id and tid.startswith('session_'):
+                        thread_id_str = str(thread_id)
+                        if len(thread_id_str) == 36 and '-' in thread_id_str and tid.startswith('session_'):
                             print(f"      💡 UUID format requested but session format found: {tid}")
-                        elif thread_id.startswith('session_') and len(tid) == 36 and '-' in tid:
+                        elif thread_id_str.startswith('session_') and len(tid) == 36 and '-' in tid:
                             print(f"      💡 Session format requested but UUID format found: {tid}")
                 else:
                     print(f"   ❌ No recent runs found in project")
@@ -1767,11 +1865,12 @@ def get_langsmith_trace_data(thread_id: str, run_id: str = None):
             # This is a safeguard against cross-session contamination
             session_number = None
             try:
-                if thread_id.startswith('assistant-'):
-                    session_number = int(thread_id.split('-')[1])
+                thread_id_str = str(thread_id)
+                if thread_id_str.startswith('assistant-'):
+                    session_number = int(thread_id_str.split('-')[1])
                     print(f"   🔢 Session number: {session_number}")
             except:
-                print(f"   ⚠️  Could not parse session number from thread_id: {thread_id}")
+                print(f"   ⚠️  Could not parse session number from thread_id: {thread_id_str}")
             
             # Log tool call validation
             print(f"   ✅ Tool calls validated for session {thread_id}")

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { message, session_id, stream: enableStreaming = false } = await request.json();
+    const { message, session_id, message_session_id, stream: enableStreaming = false } = await request.json();
 
     if (!message) {
       return new Response(
@@ -16,7 +16,7 @@ export async function POST(request) {
 
     // Si streaming n'est pas demandé, utiliser l'ancienne méthode
     if (!enableStreaming) {
-      return handleNonStreamingRequest(message, session_id);
+      return handleNonStreamingRequest(message, session_id, message_session_id);
     }
 
     // Configuration SSE
@@ -39,7 +39,7 @@ export async function POST(request) {
     };
 
     // Démarrer le streaming en arrière-plan
-    handleStreamingRequest(message, session_id, sendSSE, controller);
+    handleStreamingRequest(message, session_id, message_session_id, sendSSE, controller);
 
     return new Response(responseStream, {
       headers: {
@@ -68,7 +68,7 @@ export async function POST(request) {
 }
 
 // Fonction pour les requêtes non-streaming (fallback)
-async function handleNonStreamingRequest(message, session_id) {
+async function handleNonStreamingRequest(message, session_id, message_session_id) {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     
@@ -77,7 +77,11 @@ async function handleNonStreamingRequest(message, session_id) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ message, session_id }),
+      body: JSON.stringify({ 
+        message, 
+        session_id, 
+        message_session_id 
+      }),
     });
 
     if (!response.ok) {
@@ -110,7 +114,7 @@ async function handleNonStreamingRequest(message, session_id) {
 }
 
 // Fonction pour gérer le streaming
-async function handleStreamingRequest(message, session_id, sendSSE, controller) {
+async function handleStreamingRequest(message, session_id, message_session_id, sendSSE, controller) {
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     
@@ -123,7 +127,8 @@ async function handleStreamingRequest(message, session_id, sendSSE, controller) 
       },
       body: JSON.stringify({ 
         message: message,
-        session_id: session_id // Transmettre l'ID de session au backend
+        session_id: session_id, // Conversation session ID for agent memory
+        message_session_id: message_session_id // Message session ID for graph visualization
       }),
     });
 
