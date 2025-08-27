@@ -3,16 +3,9 @@ const nextConfig = {
   // Enable standalone output for Docker
   output: 'standalone',
   
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: process.env.NODE_ENV === 'production' 
-          ? 'http://stella-backend:8000/:path*'  // Docker service name
-          : 'http://localhost:8000/:path*',      // Local development
-      },
-    ];
-  },
+  // Remove the rewrites that conflict with internal API routes
+  // The frontend will use its own API routes in app/api/ which then proxy to the backend
+  
   // Optimisations pour le développement
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion'],

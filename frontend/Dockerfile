@@ -9,7 +9,7 @@ WORKDIR /app
 
 # Installer les dépendances basées sur le gestionnaire de paquets préféré
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Reconstruire le code source seulement quand nécessaire
 FROM base AS builder

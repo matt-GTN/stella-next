@@ -60,6 +60,9 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001", 
         "https://localhost:3000",
+        "https://trystella.app",
+        "http://trystella.app",
+        "http://app-stella-frontend:3000",  # Internal Docker network
     ],
     allow_credentials=True,
     allow_methods=["*"],

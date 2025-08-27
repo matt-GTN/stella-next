@@ -34,7 +34,8 @@ export async function POST(request) {
 
     // Fonction pour envoyer des données SSE
     const sendSSE = (data, event = 'message') => {
-      const sseData = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      const sseData = `data: ${JSON.stringify(data)}\n\n`;
+      console.log('📤 [API Route] Sending SSE:', sseData.substring(0, 100));
       controller.enqueue(encoder.encode(sseData));
     };
 
@@ -46,6 +47,7 @@ export async function POST(request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
@@ -70,7 +72,7 @@ export async function POST(request) {
 // Fonction pour les requêtes non-streaming (fallback)
 async function handleNonStreamingRequest(message, session_id, message_session_id) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://app-stella-backend:8000';
     
     const response = await fetch(`${backendUrl}/chat`, {
       method: 'POST',
@@ -116,7 +118,9 @@ async function handleNonStreamingRequest(message, session_id, message_session_id
 // Fonction pour gérer le streaming
 async function handleStreamingRequest(message, session_id, message_session_id, sendSSE, controller) {
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || 'http://app-stella-backend:8000';
+    
+    console.log(`🔗 [Streaming] Connecting to backend: ${backendUrl}/chat/stream`);
     
     // Appeler l'endpoint SSE réel du backend
     const response = await fetch(`${backendUrl}/chat/stream`, {
@@ -132,13 +136,20 @@ async function handleStreamingRequest(message, session_id, message_session_id, s
       }),
     });
 
+    console.log(`📡 [Streaming] Backend response status: ${response.status}`);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [Streaming] Backend error: ${response.status} - ${errorText}`);
       throw new Error(`Backend streaming API error: ${response.status}`);
     }
 
     if (!response.body) {
+      console.error('❌ [Streaming] No response body for streaming');
       throw new Error('No response body for streaming');
     }
+
+    console.log('✅ [Streaming] Starting to read response stream...');
 
     // Lire le flux SSE du backend et le retransmettre
     const reader = response.body.getReader();
@@ -158,22 +169,25 @@ async function handleStreamingRequest(message, session_id, message_session_id, s
           if (line.startsWith('data: ')) {
             try {
               const eventData = line.slice(6).trim();
+              console.log('📨 [API Route] Processing SSE line:', eventData.substring(0, 100));
               
               // Si c'est un message de fin
               if (eventData === '[DONE]') {
+                console.log('✅ [API Route] Received DONE signal');
                 sendSSE({ type: 'done' });
                 return;
               }
               
               // Parser les données JSON du backend
               const parsedData = JSON.parse(eventData);
+              console.log('📤 [API Route] Forwarding data:', parsedData.type);
               
               // Retransmettre les données telles quelles au frontend
               // Le backend envoie déjà le bon format
               sendSSE(parsedData);
               
             } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError, 'Raw line:', line);
+              console.error('❌ [API Route] Error parsing SSE data:', parseError, 'Raw line:', line);
               // Continuer même en cas d'erreur de parsing
             }
           } else if (line.trim() === '') {
@@ -182,7 +196,7 @@ async function handleStreamingRequest(message, session_id, message_session_id, s
           } else if (line.startsWith('event: ')) {
             // Gérer les événements spéciaux si nécessaire
             const eventType = line.slice(7).trim();
-            console.log('SSE Event type:', eventType);
+            console.log('📡 [API Route] SSE Event type:', eventType);
           }
         }
       }

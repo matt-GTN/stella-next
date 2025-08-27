@@ -97,6 +97,23 @@ export default function Home() {
       return newCounter;
     });
 
+    // Add a timeout to prevent getting stuck indefinitely
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ [Frontend] Timeout reached, stopping processing state');
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+              ...msg,
+              isStreaming: false,
+              isProcessing: false,
+              content: msg.content || msg.initialContent || msg.finalContent || "❌ Timeout: La réponse a pris trop de temps."
+            }
+            : msg
+        )
+      );
+    }, 60000); // 60 second timeout
+
     try {
       // Essayer d'abord le streaming SSE
       const useSSE = true; // Changer à false pour utiliser l'ancienne méthode
@@ -128,6 +145,8 @@ export default function Home() {
 
   // Fonction pour gérer le streaming SSE
   const handleSSEStreaming = async (content, assistantMessageId, conversationSessionId, messageSessionId) => {
+    console.log('🚀 [Frontend] Starting SSE streaming request...');
+    
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -141,9 +160,15 @@ export default function Home() {
       }),
     });
 
+    console.log(`📡 [Frontend] API response status: ${response.status}`);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [Frontend] API error: ${response.status} - ${errorText}`);
       throw new Error('Erreur réseau');
     }
+
+    console.log('✅ [Frontend] Starting to read SSE stream...');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -161,6 +186,7 @@ export default function Home() {
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
+            console.log('📨 [Frontend] Received SSE data:', data.type, data);
 
             // Gérer l'ID de session
             if (data.type === 'session_id') {
@@ -185,6 +211,7 @@ export default function Home() {
             // Gérer les messages de statut (phases de l'agent)
             else if (data.type === 'status') {
               const step = data.step || 'processing';
+              console.log('📊 [Frontend] Processing status update:', step);
               setMessages(prev =>
                 prev.map(msg =>
                   msg.id === assistantMessageId
@@ -201,6 +228,7 @@ export default function Home() {
             // Gérer le contenu initial (avant les tool calls)
             else if (data.type === 'initial_content') {
               const newContent = data.chunk || data.content || data.token || '';
+              console.log('📝 [Frontend] Received initial content chunk:', newContent.substring(0, 50));
 
               setMessages(prev =>
                 prev.map(msg =>
@@ -279,6 +307,7 @@ export default function Home() {
             }
             // Gérer la fin du streaming
             else if (data.type === 'done' || data.type === 'finished') {
+              console.log('✅ [Frontend] Received done signal, stopping processing');
               setMessages(prev =>
                 prev.map(msg =>
                   msg.id === assistantMessageId

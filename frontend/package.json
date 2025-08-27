@@ -6,14 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "node test/test-runner.js all",
-    "test:unit": "node test/test-runner.js unit",
-    "test:integration": "node test/test-runner.js integration",
-    "test:visual": "node test/test-runner.js visual",
-    "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "lint": "next lint"
   },
   "dependencies": {
     "daisyui": "^5.0.46",
