@@ -11,8 +11,8 @@ import { transformWorkflowDataSync } from './workflowTransformer';
 const langsmithDataCache = new Map();
 const langsmithRequestCache = new Map(); // Cache for ongoing requests
 
-// Cache timeout (5 minutes)
-const CACHE_TIMEOUT = 5 * 60 * 1000;
+// Cache timeout (10 minutes for better performance)
+const CACHE_TIMEOUT = 10 * 60 * 1000;
 
 /**
  * Transforme les données de trace LangSmith en format compatible avec le graphique existant
@@ -671,7 +671,7 @@ async function performLangSmithRequest(sessionId) {
   
   // Ajouter un timeout côté client aussi
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes
   
   try {
     // Add cache-busting parameter with random component
@@ -709,7 +709,7 @@ async function performLangSmithRequest(sessionId) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
       console.error('⏰ [LangSmith] Timeout côté client');
-      throw new Error('[LangSmith] timeout côté client');
+      throw new Error('[LangSmith] Timeout côté client - La session contient beaucoup de données. Essayez avec une session plus récente ou attendez que le traitement se termine.');
     }
     throw error;
   }

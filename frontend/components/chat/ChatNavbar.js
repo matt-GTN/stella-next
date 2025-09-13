@@ -95,7 +95,7 @@ export default function ChatNavbar() {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      Recherche
+                      Rapport de Recherche
                     </motion.button>
                   </Link>
                 </div>

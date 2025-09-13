@@ -1085,9 +1085,10 @@ def get_langsmith_trace_data_for_message(conversation_session_id: str, message_s
         project_name = os.environ.get("LANGCHAIN_PROJECT", "stella")
         
         # Get recent runs and look for ones with our message session ID in metadata
+        # Limit to 50 most recent runs for faster processing
         recent_runs = list(client.list_runs(
             project_name=project_name,
-            limit=200  # Increase limit to find the specific run
+            limit=50  # Reduced limit for faster processing
         ))
         
         print(f"🔍 Searching through {len(recent_runs)} runs for message session ID: {message_session_id}")

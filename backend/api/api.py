@@ -440,8 +440,8 @@ async def get_langsmith_trace(session_id: str, run_id: str = None):
                 # so we can filter the results to show only the relevant tools for this message
                 return await loop.run_in_executor(None, get_langsmith_trace_data_for_message, conversation_session_id, session_id, run_id)
             
-            # Timeout après 30 secondes pour permettre le traitement de grandes traces
-            trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=30.0)
+            # Timeout après 60 secondes pour permettre le traitement de grandes traces
+            trace_data = await asyncio.wait_for(get_trace_with_timeout(), timeout=60.0)
             
             if not trace_data:
                 logger.warning(f"No trace data found for session {session_id}")
@@ -470,7 +470,7 @@ async def get_langsmith_trace(session_id: str, run_id: str = None):
             
             raise HTTPException(
                 status_code=408,
-                detail=f"Timeout while fetching LangSmith trace data for session {session_id}. This session has a large number of runs ({session_id}). The trace processing took longer than 30 seconds. Try using a more recent session ID or check the backend logs for details."
+                detail=f"Timeout while fetching LangSmith trace data for session {session_id}. This session has a large number of runs. The trace processing took longer than 60 seconds. Try using a more recent session ID, or wait a moment and try again as the data may still be processing."
             )
         except Exception as inner_error:
             logger.error(f"Error during trace retrieval: {type(inner_error).__name__}: {inner_error}", exc_info=True)
