@@ -9,9 +9,11 @@ def preprocess_financial_data(df: pd.DataFrame) -> pd.DataFrame:
     comme 'calendarYear' pour la visualisation.
     """
     df_processed = df.copy()
-    
+    print(df_processed)
+    print(df_processed.columns)
     # On garde une trace de l'année pour la visualisation
-    df_processed['calendarYear'] = df_processed['calendarYear'].astype(str)
+    df_processed['calendarYear'] = df_processed['fiscalYear'].astype(str)
+    df_processed = df_processed.rename(columns={'returnOnEquity':'roe','returnOnInvestedCapital':'roic'})
 
     # On crée l'index pour la cohérence
     df_processed = df_processed.set_index(df_processed['symbol'] + '_' + df_processed['calendarYear'])

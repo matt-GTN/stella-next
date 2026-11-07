@@ -21,7 +21,20 @@ def compare_fundamental_metrics(tickers: list[str], metric: str) -> pd.DataFrame
         try:
             print(f"Comparaison (Évolution): Récupération des données pour {ticker}...")
             raw_df = fetch_fundamental_data(ticker)
+
+            if 'returnOnEquity' not in raw_df.columns:
+                print("returnOnEquity non trouvé")
+            else:
+                print("returnOnEquity trouvé")
+            
+            if 'returnOnInvestedCapital' not in raw_df.columns:
+                print("returnOnInvestedCapital non trouvé")
+            else:
+                print("returnOnInvestedCapital trouvé")
+            
             processed_df = preprocess_financial_data(raw_df)
+
+            print(processed_df.columns)
             
             # On vérifie que les colonnes nécessaires sont présentes
             if metric not in processed_df.columns or 'calendarYear' not in processed_df.columns:
