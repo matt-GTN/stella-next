@@ -19,3 +19,17 @@ __pycache__
 .coverage
 .DS_Store
 *.log
+# Never include runtime secrets or local state in CI images.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.git
+node_modules
+.next
+__pycache__
+.venv
+venv
+chroma_research_db
+*.sqlite*
