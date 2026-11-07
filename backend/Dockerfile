@@ -13,7 +13,8 @@ COPY requirements.txt constraints-cpu.txt ./
 # Installer les dépendances Python
 # This VPS has no GPU. Install the official CPU wheel before the other packages;
 # a constraint prevents sentence-transformers from pulling CUDA PyTorch later.
-RUN pip install --no-cache-dir torch==2.9.1+cpu --index-url https://download.pytorch.org/whl/cpu \
+RUN pip install --no-cache-dir --upgrade pip==25.3 \
+    && pip install --no-cache-dir torch==2.9.1+cpu --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -c constraints-cpu.txt -r requirements.txt \
     && pip check
 
