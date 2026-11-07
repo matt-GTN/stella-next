@@ -25,7 +25,8 @@ COPY . .
 RUN mkdir -p /app/chroma_research_db
 
 # Offline smoke tests run during every build, before any image is published.
-RUN python tests/container_smoke.py
+RUN python tests/container_smoke.py \
+    && python -m unittest discover -s tests -p 'test_*.py'
 
 # Exposer le port 8000 pour FastAPI (pas 8501 pour Streamlit)
 EXPOSE 8000
