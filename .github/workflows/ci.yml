@@ -42,6 +42,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           platforms: linux/amd64
+          load: ${{ github.event_name == 'pull_request' }}
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: |
             ghcr.io/matt-gtn/${{ matrix.image }}:${{ github.sha }}
@@ -49,3 +50,11 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Enforce backend image size budget
+        if: github.event_name == 'pull_request' && matrix.context == 'backend'
+        env:
+          IMAGE: ghcr.io/matt-gtn/stella-backend:${{ github.sha }}
+        run: |
+          size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          echo "Backend image: $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$size" -lt 3500000000
