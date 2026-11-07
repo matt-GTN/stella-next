@@ -55,3 +55,8 @@ jobs:
           size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
           echo "Backend image: $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
           test "$size" -lt 3500000000
+          container=$(docker create "$IMAGE")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          rootfs_bytes=$(docker export "$container" | wc -c)
+          echo "Backend uncompressed rootfs archive: $rootfs_bytes bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$rootfs_bytes" -lt 3500000000
