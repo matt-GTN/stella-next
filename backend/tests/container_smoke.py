@@ -18,7 +18,7 @@ from sklearn.ensemble import RandomForestClassifier
 import chromadb
 from chromadb.config import Settings
 
-assert torch.__version__ == '2.9.1+cpu'
+assert torch.__version__ == '2.15.0+cpu'
 assert torch.version.cuda is None
 names={d.metadata['Name'].lower() for d in importlib.metadata.distributions()}
 assert not any(n.startswith('nvidia-') or n=='triton' for n in names)
